@@ -20,12 +20,16 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateUser(CreateUserDto dto)
     {
+        var normalizedEmail = dto.Email
+            .Trim()
+            .ToLowerInvariant();
+        
         var user = new User
         {
             Id = Guid.NewGuid(),
             FirstName = dto.FirstName,
             LastName = dto.LastName,
-            Email = dto.Email
+            Email = normalizedEmail
         };
 
         _dbContext.Users.Add(user);
