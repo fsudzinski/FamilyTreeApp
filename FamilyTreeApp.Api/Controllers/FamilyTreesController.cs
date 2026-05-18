@@ -8,14 +8,9 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/familytrees")]
-public class FamilyTreesController : ControllerBase
+public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
 {
-    private readonly AppDbContext _dbContext;
-
-    public FamilyTreesController (AppDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly AppDbContext _dbContext = dbContext;
 
     [HttpPost]
     public async Task<IActionResult> CreateFamilyTree(CreateFamilyTreeDto dto)
@@ -86,6 +81,21 @@ public class FamilyTreesController : ControllerBase
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
+            return NotFound();
+
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateFamilyTree(Guid id, UpdateFamilyTreeDto dto)
+    {
+        var affectedRows = await _dbContext.FamilyTrees
+            .Where(ft => ft.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(ft => ft.Name, dto.Name)
+            );
+
+        if (affectedRows == 0)
             return NotFound();
 
         return NoContent();

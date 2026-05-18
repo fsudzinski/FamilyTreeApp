@@ -8,14 +8,9 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-public class UsersController : ControllerBase
+public class UsersController(AppDbContext dbContext) : ControllerBase
 {
-    private readonly AppDbContext _dbContext;
-
-    public UsersController (AppDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly AppDbContext _dbContext = dbContext;
 
     [HttpPost]
     public async Task<IActionResult> CreateUser(CreateUserDto dto)
@@ -85,4 +80,20 @@ public class UsersController : ControllerBase
 
         return Ok(user);
     }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateUser(Guid id, UpdateUserDto dto)
+    {
+        var affectedRows = await _dbContext.Users
+            .Where(u => u.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(u => u.FirstName, dto.FirstName)
+                .SetProperty(u => u.LastName, dto.LastName)
+            );
+
+        if (affectedRows == 0)
+            return NotFound();
+
+        return NoContent();
+    }        
 }
