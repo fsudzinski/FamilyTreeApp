@@ -1,7 +1,7 @@
-namespace FamilyTreeApp.Api.Dtos;
+namespace FamilyTreeApp.Api.Dtos.Persons;
 using System.ComponentModel.DataAnnotations;
 
-public class UpdateUserDto
+public class CreatePersonDto
 {
     [Required]
     [StringLength(100)]
@@ -12,6 +12,5 @@ public class UpdateUserDto
     public string LastName { get; set; } = string.Empty;
 
     [Required]
-    [EmailAddress]
-    public string Email { get; set; } = string.Empty;
+    public Guid FamilyTreeId { get; set; }
 }

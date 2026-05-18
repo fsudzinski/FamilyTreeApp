@@ -1,7 +1,7 @@
-namespace FamilyTreeApp.Api.Dtos;
+namespace FamilyTreeApp.Api.Dtos.FamilyTrees;
 using System.ComponentModel.DataAnnotations;
 
-public class UpdateFamilyTreeDto
+public class CreateFamilyTreeDto
 {
     [Required]
     [StringLength(100)]

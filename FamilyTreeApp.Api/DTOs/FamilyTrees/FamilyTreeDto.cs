@@ -1,4 +1,4 @@
-namespace FamilyTreeApp.Api.Dtos;
+namespace FamilyTreeApp.Api.Dtos.FamilyTrees;
 
 public class FamilyTreeDto
 {

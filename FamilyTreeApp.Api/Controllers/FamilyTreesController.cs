@@ -1,5 +1,6 @@
 using FamilyTreeApp.Api.Data;
-using FamilyTreeApp.Api.Dtos;
+using FamilyTreeApp.Api.Dtos.FamilyTrees;
+using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -99,5 +100,34 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
             return NotFound();
 
         return NoContent();
+    }
+
+    [HttpGet("{id:guid}/persons")]
+    public async Task<IActionResult> GetPersonsByFamilyTreeId(Guid id)
+    {
+        var familyTreeExists = await _dbContext.FamilyTrees
+            .AnyAsync(ft => ft.Id == id);
+
+        if (!familyTreeExists)
+            return NotFound("Family tree not found.");
+
+        var persons = await _dbContext.Persons
+            .Where(p => p.FamilyTreeId == id)
+            .Select(p => new PersonDto
+            {
+                Id = p.Id,
+                FirstName = p.FirstName,
+                LastName = p.LastName,
+                FamilyTreeId = p.FamilyTreeId
+            })
+            .ToListAsync();
+
+        var familyTreePersons = new FamilyTreePersonsDto
+        {
+            FamilyTreeeId = id,
+            Persons = persons
+        };
+
+        return Ok(familyTreePersons);
     }
 }

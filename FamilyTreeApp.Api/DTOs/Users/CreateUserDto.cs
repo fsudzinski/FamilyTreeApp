@@ -1,4 +1,4 @@
-namespace FamilyTreeApp.Api.Dtos;
+namespace FamilyTreeApp.Api.Dtos.Users;
 using System.ComponentModel.DataAnnotations;
 
 public class CreateUserDto

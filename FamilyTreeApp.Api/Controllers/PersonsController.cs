@@ -1,5 +1,5 @@
 using FamilyTreeApp.Api.Data;
-using FamilyTreeApp.Api.Dtos;
+using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

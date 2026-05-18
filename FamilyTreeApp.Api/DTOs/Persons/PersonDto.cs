@@ -1,4 +1,4 @@
-namespace FamilyTreeApp.Api.Dtos;
+namespace FamilyTreeApp.Api.Dtos.Persons;
 
 public class PersonDto
 {
