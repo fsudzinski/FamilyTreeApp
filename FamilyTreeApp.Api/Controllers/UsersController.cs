@@ -22,8 +22,8 @@ public class UsersController(AppDbContext dbContext) : ControllerBase
         var user = new User
         {
             Id = Guid.NewGuid(),
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
+            FirstName = dto.FirstName.Trim(),
+            LastName = dto.LastName.Trim(),
             Email = normalizedEmail
         };
 
@@ -87,8 +87,8 @@ public class UsersController(AppDbContext dbContext) : ControllerBase
         var affectedRows = await _dbContext.Users
             .Where(u => u.Id == id)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(u => u.FirstName, dto.FirstName)
-                .SetProperty(u => u.LastName, dto.LastName)
+                .SetProperty(u => u.FirstName, dto.FirstName.Trim())
+                .SetProperty(u => u.LastName, dto.LastName.Trim())
             );
 
         if (affectedRows == 0)

@@ -18,7 +18,7 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
         var familyTree = new FamilyTree
         {
             Id = Guid.NewGuid(),
-            Name = dto.Name,
+            Name = dto.Name.Trim(),
             OwnerId = dto.OwnerId
         };
 
@@ -92,7 +92,7 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
         var affectedRows = await _dbContext.FamilyTrees
             .Where(ft => ft.Id == id)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(ft => ft.Name, dto.Name)
+                .SetProperty(ft => ft.Name, dto.Name.Trim())
             );
 
         if (affectedRows == 0)
