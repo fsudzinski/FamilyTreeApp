@@ -3,13 +3,8 @@ using FamilyTreeApp.Api.Entities;
 
 namespace FamilyTreeApp.Api.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options)
-        : base(options)
-    {
-    }
-
     public DbSet<User> Users => Set<User>();
 
     public DbSet<FamilyTree> FamilyTrees => Set<FamilyTree>();
@@ -20,6 +15,22 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Email)
+            .HasMaxLength(255);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.FirstName)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.LastName)
+            .HasMaxLength(100);
+        
         modelBuilder.Entity<ParentChild>()
             .HasKey(pc => new { pc.ParentId, pc.ChildId });
 
