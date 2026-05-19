@@ -16,6 +16,12 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateFamilyTree(CreateFamilyTreeDto dto)
     {
+        var userExists = await _dbContext.Users
+            .AnyAsync(u => u.Id == dto.OwnerId);
+
+        if (!userExists)
+            return NotFound("User not found.");
+        
         var familyTree = new FamilyTree
         {
             Id = Guid.NewGuid(),
