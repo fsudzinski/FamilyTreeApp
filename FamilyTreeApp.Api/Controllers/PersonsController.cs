@@ -111,4 +111,36 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
 
         return NoContent();
     }
+
+    [HttpGet("{id:guid}/parents")]
+    public async Task<IActionResult> GetPersonParents(Guid id)
+    {
+        var parents = await _dbContext.ParentChildRelationships
+            .Where(r => r.ChildId == id)
+            .Select(r => new PersonDto
+            {
+                Id = r.Parent.Id,
+                FirstName = r.Parent.FirstName,
+                LastName = r.Parent.LastName
+            })
+            .ToListAsync();
+
+        return Ok(parents);
+    }
+
+    [HttpGet("{id:guid}/children")]
+    public async Task<IActionResult> GetPersonChildren(Guid id)
+    {
+        var children = await _dbContext.ParentChildRelationships
+            .Where(r => r.ParentId == id)
+            .Select(r => new PersonDto
+            {
+                Id = r.Child.Id,
+                FirstName = r.Child.FirstName,
+                LastName = r.Child.LastName
+            })
+            .ToListAsync();
+
+        return Ok(children);
+    }
 }
