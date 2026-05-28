@@ -1,4 +1,5 @@
 using FamilyTreeApp.Api.Data;
+using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Dtos.Relationships;
 using FamilyTreeApp.Api.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,7 @@ public class RelationshipService : IRelationshipService
     {
         // Check if different person
         if (dto.ParentId == dto.ChildId)
-            throw new ArgumentException("Parent and child cannot be the same person.");
+            throw new InvalidOperationException("Parent and child cannot be the same person.");
 
         // Check if parent exists
         var parent = await _dbContext.Persons
@@ -40,7 +41,7 @@ public class RelationshipService : IRelationshipService
 
         // Check if parent and child belong to same tree
         if (parent.FamilyTreeId != child.FamilyTreeId)
-            throw new ArgumentException(
+            throw new InvalidOperationException(
                 "Parent and child must belong to the same family tree.");
 
         // Check if relationship exists
@@ -60,7 +61,22 @@ public class RelationshipService : IRelationshipService
         if (parentsCount >= 2)
             throw new InvalidOperationException("Child already has 2 parents.");
 
-        // TODO cycle detection
+        // Cycle detection
+        var relationships = await _dbContext.ParentChildRelationships
+            .Where(r => r.Parent.FamilyTreeId == parent.FamilyTreeId)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var edges = relationships
+            .Select(r => (r.ParentId, r.ChildId))
+            .ToList();
+
+        edges.Add((dto.ParentId, dto.ChildId));
+
+        DFSCycleDetector cycleDetector = new(edges);
+
+        if (cycleDetector.HasCycle())
+            throw new InvalidOperationException("A person cannot become it's own ancestor");
 
         var relationship = new ParentChild
         {
@@ -82,6 +98,20 @@ public class RelationshipService : IRelationshipService
     public async Task<List<RelationshipDto>> GetRelationshipsAsync()
     {
         var relationships = await _dbContext.ParentChildRelationships
+        .Select(r => new RelationshipDto
+        {
+            ParentId = r.ParentId,
+            ChildId = r.ChildId
+        })
+        .ToListAsync();
+ 
+        return relationships;
+    }
+
+    public async Task<List<RelationshipDto>> GetRelationshipsByFamilyTreeIdAsync(Guid id)
+    {
+        var relationships = await _dbContext.ParentChildRelationships
+        .Where(r => r.Parent.FamilyTreeId == id)
         .Select(r => new RelationshipDto
         {
             ParentId = r.ParentId,
@@ -121,5 +151,4 @@ public class RelationshipService : IRelationshipService
 
         return;
     }
-
 }
