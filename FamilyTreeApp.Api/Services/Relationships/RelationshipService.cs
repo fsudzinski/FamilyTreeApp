@@ -1,5 +1,4 @@
 using FamilyTreeApp.Api.Data;
-using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Dtos.Relationships;
 using FamilyTreeApp.Api.Entities;
 using Microsoft.EntityFrameworkCore;
