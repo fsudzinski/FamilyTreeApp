@@ -42,6 +42,10 @@ public class RelationshipsController(IRelationshipService relationshipService) :
         {
             return Conflict(exception.Message);
         }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound();
+        }
     }
 
     // TODO check if unnecessary
