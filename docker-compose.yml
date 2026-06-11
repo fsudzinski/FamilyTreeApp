@@ -11,5 +11,23 @@ services:
     volumes:
       - db_data:/var/lib/postgresql
 
+  api:
+    build:
+      context: ./FamilyTreeApp.Api
+    container_name: familytree_api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./familytree-frontend
+    container_name: familytree_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
 volumes:
   db_data:
