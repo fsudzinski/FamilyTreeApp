@@ -20,8 +20,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             entity.HasIndex(u => u.Email).IsUnique();
             entity.Property(u => u.Email).HasMaxLength(255);
-            entity.Property(u => u.FirstName).HasMaxLength(100);
-            entity.Property(u => u.LastName).HasMaxLength(100);
         });
 
         modelBuilder.Entity<ParentChild>()

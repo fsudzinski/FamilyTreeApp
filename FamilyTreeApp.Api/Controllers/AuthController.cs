@@ -31,9 +31,7 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
         var user = new ApplicationUser
         {
             UserName = normalizedEmail,
-            Email = normalizedEmail,
-            FirstName = dto.FirstName.Trim(),
-            LastName = dto.LastName.Trim()
+            Email = normalizedEmail
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -42,19 +40,14 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
             return BadRequest(result.Errors.Select(e => e.Description));
         }
 
-        var response = new AuthResponseDto
-        {
-            Token = GenerateJwtToken(user),
-            User = new AuthUserDto
-            {
-                Id = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName
-            }
-        };
+        var token = GenerateJwtToken(user);
+        SetAuthCookie(token);
 
-        return CreatedAtAction(nameof(Me), null, response);
+        return CreatedAtAction(nameof(Me), null, new AuthUserDto
+        {
+            Id = user.Id,
+            Email = user.Email
+        });
     }
 
     [HttpPost("login")]
@@ -68,19 +61,14 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
             return Unauthorized(new { Message = "Invalid email or password." });
         }
 
-        var response = new AuthResponseDto
-        {
-            Token = GenerateJwtToken(user),
-            User = new AuthUserDto
-            {
-                Id = user.Id,
-                Email = user.Email ?? string.Empty,
-                FirstName = user.FirstName,
-                LastName = user.LastName
-            }
-        };
+        var token = GenerateJwtToken(user);
+        SetAuthCookie(token);
 
-        return Ok(response);
+        return Ok(new AuthUserDto
+        {
+            Id = user.Id,
+            Email = user.Email ?? string.Empty
+        });
     }
 
     [HttpGet("me")]
@@ -102,9 +90,7 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
         return Ok(new AuthUserDto
         {
             Id = user.Id,
-            Email = user.Email ?? string.Empty,
-            FirstName = user.FirstName,
-            LastName = user.LastName
+            Email = user.Email ?? string.Empty
         });
     }
 
@@ -118,9 +104,7 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim("firstName", user.FirstName),
-            new Claim("lastName", user.LastName)
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
@@ -133,5 +117,18 @@ public class AuthController(UserManager<ApplicationUser> userManager, IConfigura
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private void SetAuthCookie(string token)
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = false, // true in production (HTTPS)
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTime.UtcNow.AddHours(2)
+        };
+
+        Response.Cookies.Append("auth_token", token, cookieOptions);
     }
 }

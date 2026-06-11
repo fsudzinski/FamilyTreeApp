@@ -14,7 +14,14 @@ services:
   api:
     build:
       context: ./FamilyTreeApp.Api
-    container_name: familytree_api
+    volumes:
+      - ./FamilyTreeApp.Api:/app
+      - /app/obj
+      - /app/bin
+    environment:
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=familytree;Username=family;Password=family
+      - Jwt__Key=a9f3c1d8e7b2c4d6f8a1b3c5e7d9f0a2b4c6d8e0f1a3b5c7d9e0f2a4b6c8d0
     ports:
       - "8080:8080"
     depends_on:
@@ -26,6 +33,12 @@ services:
     container_name: familytree_frontend
     ports:
       - "5173:5173"
+    volumes:
+      - ./familytree-frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    command: npm run dev -- --host 0.0.0.0
     depends_on:
       - api
 
