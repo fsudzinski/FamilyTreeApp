@@ -1,6 +1,7 @@
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.Relationships;
 using FamilyTreeApp.Api.Entities;
+using FamilyTreeApp.Api.Services.CurrentUser;
 using FamilyTreeApp.Api.Services.Relationships;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,27 +18,40 @@ public class CreateRelationshipTests
         return new AppDbContext(options);
     }
 
+    public class FakeUserContext : IUserContext
+    {
+        public string UserId { get; set; } = "test-user";
+    }
+
     [Fact]
     public async Task CreateRelationship_ShouldSucceed()
     {
         var db = CreateDbContext();
+        var familyTreeId = Guid.NewGuid();
+        var userContext = new FakeUserContext();
 
         var parent = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            }            
         };
 
         var child = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = parent.FamilyTreeId
+            FamilyTreeId = familyTreeId,
+            FamilyTree = parent.FamilyTree
         };
 
         db.Persons.AddRange(parent, child);
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -55,8 +69,8 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenSamePerson()
     {
         var db = CreateDbContext();
-        var service = new RelationshipService(db);
-
+        var userContext = new FakeUserContext();
+        var service = new RelationshipService(db, userContext);
         var id = Guid.NewGuid();
 
         var dto = new CreateRelationshipDto
@@ -73,17 +87,24 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenChildNotExisting()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeId = Guid.NewGuid();
 
         var parent = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            } 
         };
 
         db.Persons.AddRange(parent);
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -99,17 +120,24 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenParentNotExisting()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeId = Guid.NewGuid();
 
         var child = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            }
         };
 
         db.Persons.Add(child);
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -125,23 +153,36 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenDifferentTrees()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeIdA = Guid.NewGuid();
+        var familyTreeIdB = Guid.NewGuid();
 
         var parent = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeIdA,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeIdA,
+                OwnerId = "test-user"
+            }
         };
 
         var child = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeIdB,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeIdB,
+                OwnerId = "test-user"
+            }
         };
 
         db.Persons.AddRange(parent, child);
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -157,17 +198,25 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenAlreadyRelated()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeId = Guid.NewGuid();
 
         var parent = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            }
         };
 
         var child = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = parent.FamilyTreeId
+            FamilyTreeId = familyTreeId,
+            FamilyTree = parent.FamilyTree
         };
 
         db.Persons.AddRange(parent, child);
@@ -182,7 +231,7 @@ public class CreateRelationshipTests
 
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -198,29 +247,39 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenMoreThanTwoParents()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeId = Guid.NewGuid();
 
         var parentA = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            }
         };
 
         var parentB = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = parentA.FamilyTreeId
+            FamilyTreeId = familyTreeId,
+            FamilyTree = parentA.FamilyTree
         };
 
         var parentC = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = parentA.FamilyTreeId
+            FamilyTreeId = familyTreeId,
+            FamilyTree = parentA.FamilyTree
         };
 
         var child = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = parentA.FamilyTreeId
+            FamilyTreeId = familyTreeId,
+            FamilyTree = parentA.FamilyTree
         };
 
         db.Persons.AddRange(parentA, parentB, parentC, child);
@@ -241,7 +300,7 @@ public class CreateRelationshipTests
 
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
@@ -257,23 +316,32 @@ public class CreateRelationshipTests
     public async Task CreateRelationship_ShouldFail_WhenCycleDetected()
     {
         var db = CreateDbContext();
+        var userContext = new FakeUserContext();
+        var familyTreeId = Guid.NewGuid();
 
         var a = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = Guid.NewGuid()
+            FamilyTreeId = familyTreeId,
+            FamilyTree = new FamilyTree
+            {
+                Id = familyTreeId,
+                OwnerId = "test-user"
+            }
         };
 
         var b = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = a.FamilyTreeId
+            FamilyTreeId = a.FamilyTreeId,
+            FamilyTree = a.FamilyTree
         };
 
         var c = new Person
         {
             Id = Guid.NewGuid(),
-            FamilyTreeId = a.FamilyTreeId
+            FamilyTreeId = a.FamilyTreeId,
+            FamilyTree = a.FamilyTree
         };
 
         db.Persons.AddRange(a, b, c);
@@ -294,7 +362,7 @@ public class CreateRelationshipTests
 
         await db.SaveChangesAsync();
 
-        var service = new RelationshipService(db);
+        var service = new RelationshipService(db, userContext);
 
         var dto = new CreateRelationshipDto
         {
