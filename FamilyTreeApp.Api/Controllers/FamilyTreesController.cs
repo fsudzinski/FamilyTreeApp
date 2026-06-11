@@ -4,6 +4,7 @@ using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.FamilyTrees;
 using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Entities;
+using FamilyTreeApp.Api.Services.CurrentUser;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,26 +13,19 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/familytrees")]
-public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
+public class FamilyTreesController(AppDbContext dbContext, UserContext userContext) : ControllerBase
 {
     private readonly AppDbContext _dbContext = dbContext;
+    private readonly UserContext _userContext = userContext;
 
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> CreateFamilyTree(CreateFamilyTreeDto dto)
     {
-        var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return Unauthorized();
-        }
-        
-        var userExists = await _dbContext.Users
-            .AnyAsync(u => u.Id == userId);
+        var userId = _userContext.UserId;
 
-        if (!userExists)
-            return NotFound("User not found.");
-        
+        // TODO exception if user has been deleted but token is still valid?
+
         var familyTree = new FamilyTree
         {
             Id = Guid.NewGuid(),
@@ -57,9 +51,13 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> GetFamilyTrees()
     {
+        var userId = _userContext.UserId;
+        
         var familytrees = await _dbContext.FamilyTrees
+        .Where(ft => ft.OwnerId == userId)
         .Select(ft => new FamilyTreeDto
         {
             Id = ft.Id,
@@ -72,10 +70,13 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> GetFamilyTreeById(Guid id)
     {
+        var userId = _userContext.UserId;
+        
         var familyTree = await _dbContext.FamilyTrees
-        .Where(ft => ft.Id == id)
+        .Where(ft => ft.Id == id && ft.OwnerId == userId)
         .Select(ft => new FamilyTreeDto
         {
             Id = ft.Id,
@@ -91,10 +92,13 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> DeleteFamilyTreeById(Guid id)
     {
+        var userId = _userContext.UserId;
+        
         var deletedCount = await _dbContext.FamilyTrees
-            .Where(ft => ft.Id == id)
+            .Where(ft => ft.Id == id && ft.OwnerId == userId)
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
@@ -104,10 +108,13 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> UpdateFamilyTree(Guid id, UpdateFamilyTreeDto dto)
     {
+        var userId = _userContext.UserId;
+        
         var affectedRows = await _dbContext.FamilyTrees
-            .Where(ft => ft.Id == id)
+            .Where(ft => ft.Id == id && ft.OwnerId == userId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(ft => ft.Name, dto.Name.Trim())
             );
@@ -119,16 +126,13 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:guid}/persons")]
+    [Authorize]
     public async Task<IActionResult> GetPersonsByFamilyTreeId(Guid id)
     {
-        var familyTreeExists = await _dbContext.FamilyTrees
-            .AnyAsync(ft => ft.Id == id);
-
-        if (!familyTreeExists)
-            return NotFound("Family tree not found.");
+        var userId = _userContext.UserId;
 
         var persons = await _dbContext.Persons
-            .Where(p => p.FamilyTreeId == id)
+            .Where(p => p.FamilyTreeId == id && p.FamilyTree.OwnerId == userId)
             .Select(p => new PersonDto
             {
                 Id = p.Id,
