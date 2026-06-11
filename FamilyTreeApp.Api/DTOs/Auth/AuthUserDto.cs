@@ -1,8 +1,8 @@
-namespace FamilyTreeApp.Api.Dtos.Users;
+namespace FamilyTreeApp.Api.Dtos.Auth;
 
-public class UserDto
+public class AuthUserDto
 {
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;

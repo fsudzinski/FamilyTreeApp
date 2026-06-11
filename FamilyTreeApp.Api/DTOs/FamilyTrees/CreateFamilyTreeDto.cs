@@ -6,7 +6,6 @@ public class CreateFamilyTreeDto
     [Required]
     [StringLength(100)]
     public string Name { get; set; } = string.Empty;
-    
     [Required]
-    public Guid OwnerId { get; set; }
+    public string OwnerId { get; set; } = string.Empty;
 }

@@ -1,11 +1,10 @@
 namespace FamilyTreeApp.Api.Entities;
 
-public class User
+using Microsoft.AspNetCore.Identity;
+
+public class ApplicationUser : IdentityUser
 {
-    public Guid Id { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
     public List<FamilyTree> FamilyTrees { get; set; } = [];
 }

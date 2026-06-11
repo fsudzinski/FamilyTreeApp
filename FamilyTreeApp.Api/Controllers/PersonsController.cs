@@ -77,7 +77,7 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
         })
         .FirstOrDefaultAsync();
 
-        if (person == null)
+        if (person is null)
             return NotFound();
 
         return Ok(person);

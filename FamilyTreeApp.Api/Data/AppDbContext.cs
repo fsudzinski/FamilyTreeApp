@@ -1,12 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using FamilyTreeApp.Api.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace FamilyTreeApp.Api.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
-    public DbSet<User> Users => Set<User>();
-
     public DbSet<FamilyTree> FamilyTrees => Set<FamilyTree>();
 
     public DbSet<Person> Persons => Set<Person>();
@@ -15,22 +14,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<User>()
-            .HasIndex(u => u.Email)
-            .IsUnique();
+        base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<User>()
-            .Property(u => u.Email)
-            .HasMaxLength(255);
+        modelBuilder.Entity<ApplicationUser>(entity =>
+        {
+            entity.HasIndex(u => u.Email).IsUnique();
+            entity.Property(u => u.Email).HasMaxLength(255);
+            entity.Property(u => u.FirstName).HasMaxLength(100);
+            entity.Property(u => u.LastName).HasMaxLength(100);
+        });
 
-        modelBuilder.Entity<User>()
-            .Property(u => u.FirstName)
-            .HasMaxLength(100);
-
-        modelBuilder.Entity<User>()
-            .Property(u => u.LastName)
-            .HasMaxLength(100);
-        
         modelBuilder.Entity<ParentChild>()
             .HasKey(pc => new { pc.ParentId, pc.ChildId });
 

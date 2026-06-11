@@ -74,7 +74,7 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
         })
         .FirstOrDefaultAsync();
 
-        if (familyTree == null)
+        if (familyTree is null)
             return NotFound();
 
         return Ok(familyTree);

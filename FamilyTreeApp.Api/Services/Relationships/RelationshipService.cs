@@ -27,10 +27,10 @@ public class RelationshipService : IRelationshipService
         var parent = persons.FirstOrDefault(p => p.Id == dto.ParentId);
         var child = persons.FirstOrDefault(p => p.Id == dto.ChildId);
 
-        if (parent == null)
+        if (parent is null)
             throw new KeyNotFoundException("Parent not found.");
 
-        if (child == null)
+        if (child is null)
             throw new KeyNotFoundException("Child not found.");
         
        if (parent.FamilyTreeId != child.FamilyTreeId)
