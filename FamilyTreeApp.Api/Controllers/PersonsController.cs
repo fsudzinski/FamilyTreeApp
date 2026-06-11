@@ -1,6 +1,8 @@
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Entities;
+using FamilyTreeApp.Api.Services.CurrentUser;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,15 +10,19 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/persons")]
-public class PersonsController(AppDbContext dbContext) : ControllerBase
+public class PersonsController(AppDbContext dbContext, IUserContext userContext) : ControllerBase
 {
     private readonly AppDbContext _dbContext = dbContext;
+    private readonly IUserContext _userContext = userContext;
 
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreatePerson(CreatePersonDto dto)
     {
+        var userId = _userContext.UserId;
+        
         var familyTreeExists = await _dbContext.FamilyTrees
-            .AnyAsync(ft => ft.Id == dto.FamilyTreeId);
+            .AnyAsync(ft => ft.Id == dto.FamilyTreeId && ft.OwnerId == userId);
 
         if (!familyTreeExists)
             return NotFound("Family tree not found.");
@@ -47,27 +53,35 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
         );
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetPersons()
-    {
-        var persons = await _dbContext.Persons
-        .Select(p => new PersonDto
-        {
-            Id = p.Id,
-            FirstName = p.FirstName,
-            LastName = p.LastName,
-            FamilyTreeId = p.FamilyTreeId
-        })
-        .ToListAsync();
+    // TODO unnecessary?
+    // [HttpGet]
+    // [Authorize]
+    // public async Task<IActionResult> GetPersons()
+    // {
+    //     var userId = _userContext.UserId;
 
-        return Ok(persons);
-    }
+    //     var persons = await _dbContext.Persons
+    //     .Where(p => p.FamilyTree.OwnerId == userId)
+    //     .Select(p => new PersonDto
+    //     {
+    //         Id = p.Id,
+    //         FirstName = p.FirstName,
+    //         LastName = p.LastName,
+    //         FamilyTreeId = p.FamilyTreeId
+    //     })
+    //     .ToListAsync();
+
+    //     return Ok(persons);
+    // }
 
     [HttpGet("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> GetPersonById(Guid id)
     {
+        var userId = _userContext.UserId;
+        
         var person = await _dbContext.Persons
-        .Where(p => p.Id == id)
+        .Where(p => p.Id == id && p.FamilyTree.OwnerId == userId)
         .Select(p => new PersonDto
         {
             Id = p.Id,
@@ -84,10 +98,13 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> UpdatePerson(Guid id, UpdatePersonDto dto)
     {
+        var userId = _userContext.UserId;
+
         var affectedRows = await _dbContext.Persons
-            .Where(p => p.Id == id)
+            .Where(p => p.Id == id && p.FamilyTree.OwnerId == userId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(p => p.FirstName, dto.FirstName.Trim())
                 .SetProperty(p => p.LastName, dto.LastName.Trim())
@@ -100,10 +117,13 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
     }
     
     [HttpDelete("{id:guid}")]
+    [Authorize]
     public async Task<IActionResult> DeletePersonById(Guid id)
     {
+        var userId = _userContext.UserId;
+
         var deletedCount = await _dbContext.Persons
-            .Where(p => p.Id == id)
+            .Where(p => p.Id == id && p.FamilyTree.OwnerId == userId)
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
@@ -113,8 +133,17 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:guid}/parents")]
+    [Authorize]
     public async Task<IActionResult> GetPersonParents(Guid id)
     {
+        var userId = _userContext.UserId;
+        
+        var isTreeOwner = await _dbContext.Persons
+            .AnyAsync(p => p.Id == id && p.FamilyTree.OwnerId == userId);
+
+        if (!isTreeOwner)
+            return NotFound();
+        
         var parents = await _dbContext.ParentChildRelationships
             .Where(r => r.ChildId == id)
             .Select(r => new PersonDto
@@ -129,8 +158,17 @@ public class PersonsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:guid}/children")]
+    [Authorize]
     public async Task<IActionResult> GetPersonChildren(Guid id)
     {
+        var userId = _userContext.UserId;
+        
+        var isTreeOwner = await _dbContext.Persons
+            .AnyAsync(p => p.Id == id && p.FamilyTree.OwnerId == userId);
+
+        if (!isTreeOwner)
+            return NotFound();
+
         var children = await _dbContext.ParentChildRelationships
             .Where(r => r.ParentId == id)
             .Select(r => new PersonDto
