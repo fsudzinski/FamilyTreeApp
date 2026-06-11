@@ -1,26 +1,27 @@
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.Relationships;
 using FamilyTreeApp.Api.Entities;
+using FamilyTreeApp.Api.Services.CurrentUser;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyTreeApp.Api.Services.Relationships;
 
-public class RelationshipService : IRelationshipService
+public class RelationshipService(AppDbContext dbContext, IUserContext userContext) : IRelationshipService
 {
-    private readonly AppDbContext _dbContext;
-
-    public RelationshipService(AppDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly AppDbContext _dbContext = dbContext;
+    private readonly IUserContext _userContext = userContext;
 
     public async Task<RelationshipDto> CreateRelationshipAsync(CreateRelationshipDto dto)
-    {
+    {        
+        var userId = _userContext.UserId;
+
         if(dto.ParentId == dto.ChildId)            
             throw new InvalidOperationException("Can't be related to self.");
-
+        
         var persons = await _dbContext.Persons
-            .Where(p => p.Id == dto.ParentId || p.Id == dto.ChildId)
+            .Where(p => 
+                (p.Id == dto.ParentId || p.Id == dto.ChildId)
+                && p.FamilyTree.OwnerId == userId)
             .Select(p => new { p.Id, p.FamilyTreeId })
             .ToListAsync();
 
@@ -71,38 +72,45 @@ public class RelationshipService : IRelationshipService
         };
     }
 
-    public async Task<List<RelationshipDto>> GetRelationshipsAsync()
-    {
-        var relationships = await _dbContext.ParentChildRelationships
-        .Select(r => new RelationshipDto
-        {
-            ParentId = r.ParentId,
-            ChildId = r.ChildId
-        })
-        .ToListAsync();
+    // TODO check if unnecessary
+    // public async Task<List<RelationshipDto>> GetRelationshipsAsync()
+    // {
+    //     var userId = _userContext.UserId;
+        
+    //     var relationships = await _dbContext.ParentChildRelationships
+    //     .Where(r => r.Parent.FamilyTree.OwnerId == userId && r.Child.FamilyTree.OwnerId == userId)
+    //     .Select(r => new RelationshipDto
+    //     {
+    //         ParentId = r.ParentId,
+    //         ChildId = r.ChildId
+    //     })
+    //     .ToListAsync();
  
-        return relationships;
-    }
+    //     return relationships;
+    // }
 
-    public async Task<List<RelationshipDto>> GetRelationshipsByFamilyTreeIdAsync(Guid id)
-    {
-        var relationships = await _dbContext.ParentChildRelationships
-        .Where(r => r.Parent.FamilyTreeId == id)
-        .Select(r => new RelationshipDto
-        {
-            ParentId = r.ParentId,
-            ChildId = r.ChildId
-        })
-        .ToListAsync();
+    // public async Task<List<RelationshipDto>> GetRelationshipsByFamilyTreeIdAsync(Guid id)
+    // {
+    //     var relationships = await _dbContext.ParentChildRelationships
+    //     .Where(r => r.Parent.FamilyTreeId == id)
+    //     .Select(r => new RelationshipDto
+    //     {
+    //         ParentId = r.ParentId,
+    //         ChildId = r.ChildId
+    //     })
+    //     .ToListAsync();
  
-        return relationships;
-    }
+    //     return relationships;
+    // }
 
     public async Task<RelationshipDto> GetRelationshipAsync(Guid parentId, Guid childId)
     {
+        var userId = _userContext.UserId;
+
         var relationship = await _dbContext.ParentChildRelationships
-            .Where(p => p.ParentId == parentId)
-            .Where(p => p.ChildId == childId)
+            .Where(r => r.ParentId == parentId)
+            .Where(r => r.ChildId == childId)
+            .Where(r => r.Parent.FamilyTree.OwnerId == userId && r.Child.FamilyTree.OwnerId == userId)
             .AnyAsync();
 
         if (!relationship)
@@ -116,10 +124,13 @@ public class RelationshipService : IRelationshipService
     }
 
     public async Task DeleteRelationshipAsync(Guid parentId, Guid childId)
-    {
+    {        
+        var userId = _userContext.UserId;
+        
         var deletedCount = await _dbContext.ParentChildRelationships
             .Where(p => p.ParentId == parentId)
             .Where(p => p.ChildId == childId)
+            .Where(r => r.Parent.FamilyTree.OwnerId == userId && r.Child.FamilyTree.OwnerId == userId)
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
@@ -127,6 +138,7 @@ public class RelationshipService : IRelationshipService
 
         return;
     }
+
     private async Task ValidateCycle(Guid parentId, Guid childId, Guid familyTreeId)
     {
         var relationships = await _dbContext.ParentChildRelationships

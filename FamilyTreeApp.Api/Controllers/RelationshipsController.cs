@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.Relationships;
-using Microsoft.EntityFrameworkCore;
-using FamilyTreeApp.Api.Entities;
 using FamilyTreeApp.Api.Services.Relationships;
+using FamilyTreeApp.Api.Services.CurrentUser;
+using Microsoft.AspNetCore.Authorization;
 
 namespace FamilyTreeApp.Api.Controllers;
 
@@ -14,6 +13,7 @@ public class RelationshipsController(IRelationshipService relationshipService) :
     private readonly IRelationshipService _relationshipService = relationshipService;
 
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreateRelationship(CreateRelationshipDto dto)
     {
         try
@@ -44,15 +44,17 @@ public class RelationshipsController(IRelationshipService relationshipService) :
         }
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetRelationships()
-    {
-        var relationships = await _relationshipService.GetRelationshipsAsync();
+    // TODO check if unnecessary
+    // [HttpGet]
+    // public async Task<IActionResult> GetRelationships()
+    // {
+    //     var relationships = await _relationshipService.GetRelationshipsAsync();
 
-        return Ok(relationships);
-    }
+    //     return Ok(relationships);
+    // }
 
     [HttpGet("{parentId:guid}/{childId:guid}")]
+    [Authorize]
     public async Task<IActionResult> GetRelationship(Guid parentId, Guid childId)
     {
         try {
@@ -63,10 +65,15 @@ public class RelationshipsController(IRelationshipService relationshipService) :
         catch (KeyNotFoundException)
         {
             return NotFound();
-        }   
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpDelete("{parentId:guid}/{childId:guid}")]
+    [Authorize]
     public async Task<IActionResult> DeleteRelationship(Guid parentId, Guid childId)
     {
         try {
@@ -77,7 +84,11 @@ public class RelationshipsController(IRelationshipService relationshipService) :
         catch (KeyNotFoundException)
         {
             return NotFound();
-        }   
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound();
+        }
     }
 
 }
