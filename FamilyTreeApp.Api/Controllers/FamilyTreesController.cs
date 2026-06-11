@@ -1,7 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.FamilyTrees;
 using FamilyTreeApp.Api.Dtos.Persons;
 using FamilyTreeApp.Api.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,10 +17,17 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
     private readonly AppDbContext _dbContext = dbContext;
 
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreateFamilyTree(CreateFamilyTreeDto dto)
     {
+        var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized();
+        }
+        
         var userExists = await _dbContext.Users
-            .AnyAsync(u => u.Id == dto.OwnerId);
+            .AnyAsync(u => u.Id == userId);
 
         if (!userExists)
             return NotFound("User not found.");
@@ -26,7 +36,7 @@ public class FamilyTreesController(AppDbContext dbContext) : ControllerBase
         {
             Id = Guid.NewGuid(),
             Name = dto.Name.Trim(),
-            OwnerId = dto.OwnerId
+            OwnerId = userId
         };
 
         _dbContext.FamilyTrees.Add(familyTree);
