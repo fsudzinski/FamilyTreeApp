@@ -13,10 +13,10 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/familytrees")]
-public class FamilyTreesController(AppDbContext dbContext, UserContext userContext) : ControllerBase
+public class FamilyTreesController(AppDbContext dbContext, IUserContext userContext) : ControllerBase
 {
     private readonly AppDbContext _dbContext = dbContext;
-    private readonly UserContext _userContext = userContext;
+    private readonly IUserContext _userContext = userContext;
 
     [HttpPost]
     [Authorize]
