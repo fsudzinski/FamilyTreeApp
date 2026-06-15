@@ -22,7 +22,7 @@ export default function Register() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
 
     try {
@@ -41,6 +41,7 @@ export default function Register() {
 
   return (
     <form onSubmit={handleSubmit}>
+      <h1>Register</h1>
       <input name="email" value={form.email} onChange={handleChange} />
       <input name="password" value={form.password} onChange={handleChange} />
 
