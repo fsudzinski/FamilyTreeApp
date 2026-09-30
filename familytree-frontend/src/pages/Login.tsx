@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { login } from "../api/auth";
 import { useAuth } from "../auth/AuthContext";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 type Form = {
@@ -56,7 +56,7 @@ export default function Login() {
   };
 
   if (status === "loading") {
-    return <p>Checking your session...</p>;
+    return <main className="status-page"><p>Checking your session...</p></main>;
   }
 
   if (status === "authenticated") {
@@ -64,17 +64,50 @@ export default function Login() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Login</h1>
-      <input name="email" value={form.email} onChange={handleChange} />
-      <input name="password" value={form.password} onChange={handleChange} />
+    <main className="auth-page">
+      <section className="auth-panel">
+        <p className="eyebrow">Family tree</p>
+        <h1>Welcome back</h1>
+        <p className="page-intro">Sign in to continue building your family history.</p>
 
-      <button disabled={loading}>
-        {loading ? "Loading..." : "Login"}
-      </button>
+        <form className="form-stack" onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              name="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              value={form.password}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
-      {error && <pre style={{ color: "red" }}>{error}</pre>}
-    </form>
+          {error && <pre className="form-error" role="alert">{error}</pre>}
+
+          <button className="primary-button" type="submit" disabled={loading}>
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          New here? <Link to="/register">Create an account</Link>
+        </p>
+      </section>
+    </main>
   );
 
 }

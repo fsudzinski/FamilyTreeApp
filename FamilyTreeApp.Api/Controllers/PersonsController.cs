@@ -122,12 +122,29 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
     {
         var userId = _userContext.UserId;
 
+        var personExists = await _dbContext.Persons
+            .AnyAsync(p => p.Id == id && p.FamilyTree.OwnerId == userId);
+
+        if (!personExists)
+            return NotFound();
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+        await _dbContext.ParentChildRelationships
+            .Where(r => r.ParentId == id || r.ChildId == id)
+            .ExecuteDeleteAsync();
+
         var deletedCount = await _dbContext.Persons
             .Where(p => p.Id == id && p.FamilyTree.OwnerId == userId)
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
+        {
+            await transaction.RollbackAsync();
             return NotFound();
+        }
+
+        await transaction.CommitAsync();
 
         return NoContent();
     }

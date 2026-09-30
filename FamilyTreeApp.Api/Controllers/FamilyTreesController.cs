@@ -96,13 +96,30 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
     public async Task<IActionResult> DeleteFamilyTreeById(Guid id)
     {
         var userId = _userContext.UserId;
-        
+
+        var isOwner = await _dbContext.FamilyTrees
+            .AnyAsync(ft => ft.Id == id && ft.OwnerId == userId);
+
+        if (!isOwner)
+            return NotFound();
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+        await _dbContext.ParentChildRelationships
+            .Where(r => r.Parent.FamilyTreeId == id || r.Child.FamilyTreeId == id)
+            .ExecuteDeleteAsync();
+
         var deletedCount = await _dbContext.FamilyTrees
             .Where(ft => ft.Id == id && ft.OwnerId == userId)
             .ExecuteDeleteAsync();
 
         if (deletedCount == 0)
+        {
+            await transaction.RollbackAsync();
             return NotFound();
+        }
+
+        await transaction.CommitAsync();
 
         return NoContent();
     }
