@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { register } from "../api/auth";
+import { useAuth } from "../auth/AuthContext";
+import { Navigate, useNavigate } from "react-router-dom";
+import axios from "axios";
 
 type Form = {
   email: string;
@@ -14,6 +17,9 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const { status, refreshUser } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({
@@ -30,14 +36,32 @@ export default function Register() {
       setError(null);
 
       await register(form);
+      await refreshUser();
+      navigate("/trees");
 
-      alert("Registered successfully!");
     } catch (err) {
-      setError((err as Error).message);
+      if (axios.isAxiosError(err)) {
+        const body = err.response?.data;
+        setError(
+          typeof body === "string"
+            ? body
+            : JSON.stringify(body ?? err.message, null, 2),
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Registration failed");
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (status === "loading") {
+    return <p>Checking your session...</p>;
+  }
+
+  if (status === "authenticated") {
+    return <Navigate to="/trees" replace />;
+  }
 
   return (
     <form onSubmit={handleSubmit}>
@@ -49,7 +73,7 @@ export default function Register() {
         {loading ? "Loading..." : "Register"}
       </button>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <pre style={{ color: "red" }}>{error}</pre>}
     </form>
   );
 }
