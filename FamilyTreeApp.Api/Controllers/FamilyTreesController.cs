@@ -155,6 +155,8 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
                 Id = p.Id,
                 FirstName = p.FirstName,
                 LastName = p.LastName,
+                BirthYear = p.BirthYear,
+                DeathYear = p.DeathYear,
                 FamilyTreeId = p.FamilyTreeId
             })
             .ToListAsync();

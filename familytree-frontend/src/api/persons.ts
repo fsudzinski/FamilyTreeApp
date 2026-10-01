@@ -4,6 +4,8 @@ export type Person = {
   id: string;
   firstName: string;
   lastName: string;
+  birthYear: number | null;
+  deathYear: number | null;
   familyTreeId?: string;
 };
 
@@ -27,6 +29,8 @@ export async function createPerson(person: {
   firstName: string;
   lastName: string;
   familyTreeId: string;
+  birthYear?: number | null;
+  deathYear?: number | null;
 }) {
   const response = await api.post<Person>("/persons", person);
   return response.data;
@@ -34,7 +38,12 @@ export async function createPerson(person: {
 
 export async function updatePerson(
   personId: string,
-  person: { firstName: string; lastName: string },
+  person: {
+    firstName: string;
+    lastName: string;
+    birthYear: number | null;
+    deathYear: number | null;
+  },
 ) {
   await api.put(`/persons/${personId}`, person);
 }

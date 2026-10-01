@@ -38,11 +38,13 @@ import { createRelationship, deleteRelationship } from "../api/relationships";
 import { useAuth } from "../auth/AuthContext";
 
 type NameField = "firstName" | "lastName";
+type YearField = "birthYear" | "deathYear";
+type PersonField = NameField | YearField;
 type RelationshipSide = "parent" | "child";
 type PersonNodeData = {
   person: Person;
   canAddParent: boolean;
-  onRename: (person: Person, field: NameField, value: string) => Promise<void>;
+  onRename: (person: Person, field: PersonField, value: string) => Promise<void>;
   onDelete: (person: Person) => Promise<void>;
   onAddRelated: (
     person: Person,
@@ -129,7 +131,7 @@ function ConnectionEdgeView({
 const edgeTypes = { connection: ConnectionEdgeView };
 
 function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
-  const [editingField, setEditingField] = useState<NameField | null>(null);
+  const [editingField, setEditingField] = useState<PersonField | null>(null);
   const [draft, setDraft] = useState("");
   const [addingSide, setAddingSide] = useState<RelationshipSide | null>(null);
   const [relatedFirstName, setRelatedFirstName] = useState("");
@@ -137,8 +139,8 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
   const [adding, setAdding] = useState(false);
   const savingRef = useRef(false);
 
-  function startEditing(field: NameField) {
-    setDraft(data.person[field]);
+  function startEditing(field: PersonField) {
+    setDraft(String(data.person[field] ?? ""));
     setEditingField(field);
   }
 
@@ -146,10 +148,12 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
     if (!editingField || savingRef.current) return;
     const field = editingField;
     const value = draft.trim();
-    if (!value) {
+    const isYearField = field === "birthYear" || field === "deathYear";
+    if (!value && !isYearField) {
       setEditingField(null);
       return;
     }
+    if (isYearField && value && (!/^\d{1,4}$/.test(value) || Number(value) < 1)) return;
 
     savingRef.current = true;
     try {
@@ -200,6 +204,54 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
         }}
       >
         {data.person[field]}
+      </button>
+    );
+  }
+
+  function renderYear(field: YearField) {
+    if (editingField === field) {
+      return (
+        <input
+          className="person-inline-input person-year-input nodrag"
+          type="number"
+          min={1}
+          max={9999}
+          step={1}
+          aria-label={`Edit ${field === "birthYear" ? "birth" : "death"} year`}
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => void commitEdit()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commitEdit();
+            }
+            if (event.key === "Escape") setEditingField(null);
+          }}
+        />
+      );
+    }
+
+    const year = data.person[field];
+    return (
+      <button
+        className="person-year-button nodrag"
+        type="button"
+        aria-label={`${field === "birthYear" ? "Birth" : "Death"} year: ${year ?? "not set"}`}
+        title={`Double-click to edit ${field === "birthYear" ? "birth" : "death"} year`}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          startEditing(field);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.stopPropagation();
+            startEditing(field);
+          }
+        }}
+      >
+        {year ?? (field === "birthYear" ? "Born" : "Died")}
       </button>
     );
   }
@@ -266,6 +318,11 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
       )}
       {renderName("firstName")}
       {renderName("lastName")}
+      <div className="person-year-fields">
+        {renderYear("birthYear")}
+        <span aria-hidden="true">–</span>
+        {renderYear("deathYear")}
+      </div>
       <button
         className="person-add-button person-add-child nodrag nopan"
         type="button"
@@ -456,6 +513,8 @@ export default function TreeView() {
   const [treeActionId, setTreeActionId] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [birthYear, setBirthYear] = useState("");
+  const [deathYear, setDeathYear] = useState("");
   const [treesLoading, setTreesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
@@ -465,12 +524,18 @@ export default function TreeView() {
   const [nodes, setNodes, onNodesChange] = useNodesState<PersonTreeNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
 
-  const handleRename = useCallback(async (person: Person, field: NameField, value: string) => {
-    const updatedPerson = { ...person, [field]: value };
+  const handleRename = useCallback(async (person: Person, field: PersonField, value: string) => {
+    const updatedPerson: Person = field === "birthYear"
+      ? { ...person, birthYear: value ? Number(value) : null }
+      : field === "deathYear"
+        ? { ...person, deathYear: value ? Number(value) : null }
+        : { ...person, [field]: value };
     try {
       await updatePerson(person.id, {
         firstName: updatedPerson.firstName,
         lastName: updatedPerson.lastName,
+        birthYear: updatedPerson.birthYear,
+        deathYear: updatedPerson.deathYear,
       });
       setNodes((currentNodes) => currentNodes.map((node) =>
         node.id === person.id
@@ -704,9 +769,13 @@ export default function TreeView() {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         familyTreeId: selectedTreeId,
+        birthYear: birthYear ? Number(birthYear) : null,
+        deathYear: deathYear ? Number(deathYear) : null,
       });
       setFirstName("");
       setLastName("");
+      setBirthYear("");
+      setDeathYear("");
       setReadyTreeId(null);
       setLoadedTreeId(null);
       setReloadCount((count) => count + 1);
@@ -883,6 +952,10 @@ export default function TreeView() {
               <input id="person-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} maxLength={100} required />
               <label htmlFor="person-last-name">Last name</label>
               <input id="person-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} maxLength={100} required />
+              <label htmlFor="person-birth-year">Birth year</label>
+              <input id="person-birth-year" type="number" min={1} max={9999} step={1} value={birthYear} onChange={(event) => setBirthYear(event.target.value)} />
+              <label htmlFor="person-death-year">Death year</label>
+              <input id="person-death-year" type="number" min={1} max={9999} step={1} value={deathYear} onChange={(event) => setDeathYear(event.target.value)} />
               <button className="sidebar-add-button" type="submit" disabled={saving}>
                 {saving ? "Adding..." : "+ Add person"}
               </button>

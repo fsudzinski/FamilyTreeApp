@@ -32,6 +32,8 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             Id = Guid.NewGuid(),
             FirstName = dto.FirstName.Trim(),
             LastName = dto.LastName.Trim(),
+            BirthYear = dto.BirthYear,
+            DeathYear = dto.DeathYear,
             FamilyTreeId = dto.FamilyTreeId
         };
 
@@ -43,6 +45,8 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             Id = person.Id,
             FirstName = person.FirstName,
             LastName = person.LastName,
+            BirthYear = person.BirthYear,
+            DeathYear = person.DeathYear,
             FamilyTreeId = person.FamilyTreeId
         };
 
@@ -87,6 +91,8 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             Id = p.Id,
             FirstName = p.FirstName,
             LastName = p.LastName,
+            BirthYear = p.BirthYear,
+            DeathYear = p.DeathYear,
             FamilyTreeId = p.FamilyTreeId
         })
         .FirstOrDefaultAsync();
@@ -108,6 +114,8 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(p => p.FirstName, dto.FirstName.Trim())
                 .SetProperty(p => p.LastName, dto.LastName.Trim())
+                .SetProperty(p => p.BirthYear, dto.BirthYear)
+                .SetProperty(p => p.DeathYear, dto.DeathYear)
             );
 
         if (affectedRows == 0)
@@ -167,7 +175,9 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             {
                 Id = r.Parent.Id,
                 FirstName = r.Parent.FirstName,
-                LastName = r.Parent.LastName
+                LastName = r.Parent.LastName,
+                BirthYear = r.Parent.BirthYear,
+                DeathYear = r.Parent.DeathYear
             })
             .ToListAsync();
 
@@ -192,7 +202,9 @@ public class PersonsController(AppDbContext dbContext, IUserContext userContext)
             {
                 Id = r.Child.Id,
                 FirstName = r.Child.FirstName,
-                LastName = r.Child.LastName
+                LastName = r.Child.LastName,
+                BirthYear = r.Child.BirthYear,
+                DeathYear = r.Child.DeathYear
             })
             .ToListAsync();
 

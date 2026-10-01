@@ -1082,6 +1082,32 @@
   font-weight: 600;
 }
 
+.person-year-fields {
+  display: flex;
+  min-height: 18px;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.person-year-button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: #68766a;
+  background: transparent;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  cursor: text;
+}
+
+.person-year-button:hover {
+  color: #315844;
+  text-decoration: underline;
+  text-decoration-color: #b9c6b3;
+  text-underline-offset: 2px;
+}
+
 .person-inline-input {
   width: 100%;
   min-width: 0;
@@ -1092,6 +1118,11 @@
   background: #fffefa;
   font-size: 0.86rem;
   text-align: center;
+}
+
+.person-year-input {
+  width: 62px;
+  padding-inline: 2px;
 }
 
 .person-delete-button {
