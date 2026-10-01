@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Services.Relationships;
+using FamilyTreeApp.Api.Services.TreeComparison;
 using FamilyTreeApp.Api.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using FamilyTreeApp.Api.Services.CurrentUser;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using FamilyTreeApp.Api.Dtos.TreeComparison;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,6 +74,7 @@ builder.Services.AddCors(options =>
             .AllowCredentials();
     });
 });
+builder.Services.AddScoped<IFamilyTreeComparisonService, FamilyTreeComparisonService>();
 
 var app = builder.Build();
 

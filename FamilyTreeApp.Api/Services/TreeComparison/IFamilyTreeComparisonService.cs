@@ -1,4 +1,4 @@
-namespace FamilyTreeApp.Api.Dtos.TreeMatching;
+namespace FamilyTreeApp.Api.Dtos.TreeComparison;
 
 public interface IFamilyTreeComparisonService
 {

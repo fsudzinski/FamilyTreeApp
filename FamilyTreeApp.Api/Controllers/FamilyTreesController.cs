@@ -3,6 +3,7 @@ using System.Security.Claims;
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.FamilyTrees;
 using FamilyTreeApp.Api.Dtos.Persons;
+using FamilyTreeApp.Api.Dtos.TreeComparison;
 using FamilyTreeApp.Api.Entities;
 using FamilyTreeApp.Api.Services.CurrentUser;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,11 @@ namespace FamilyTreeApp.Api.Controllers;
 
 [ApiController]
 [Route("api/familytrees")]
-public class FamilyTreesController(AppDbContext dbContext, IUserContext userContext) : ControllerBase
+public class FamilyTreesController(AppDbContext dbContext, IUserContext userContext, IFamilyTreeComparisonService comparisonService) : ControllerBase
 {
     private readonly AppDbContext _dbContext = dbContext;
     private readonly IUserContext _userContext = userContext;
+    private readonly IFamilyTreeComparisonService _comparisonService = comparisonService;
 
     [HttpPost]
     [Authorize]
@@ -168,5 +170,17 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
         };
 
         return Ok(familyTreePersons);
+    }
+
+    [HttpGet("{treeAId:guid}/compare/{treeBId:guid}")]
+    [Authorize]
+    public async Task<ActionResult<List<MatchCandidates>>> Compare(
+        Guid treeAId,
+        Guid treeBId)
+    {
+        var candidates = await _comparisonService
+            .GetMatchCandidates(treeAId, treeBId);
+
+        return Ok(candidates);
     }
 }

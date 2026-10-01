@@ -1,10 +1,10 @@
-namespace FamilyTreeApp.Api.Services.TreeMatching;
+namespace FamilyTreeApp.Api.Services.TreeComparison;
 
 using FamilyTreeApp.Api.Data;
 using FamilyTreeApp.Api.Dtos.Relationships;
 using FamilyTreeApp.Api.Services.CurrentUser;
 using Microsoft.EntityFrameworkCore;
-using FamilyTreeApp.Api.Dtos.TreeMatching;
+using FamilyTreeApp.Api.Dtos.TreeComparison;
 using FamilyTreeApp.Api.Dtos.Persons;
 
 public class FamilyTreeComparisonService(AppDbContext dbContext, IUserContext userContext) : IFamilyTreeComparisonService
@@ -130,8 +130,8 @@ public class FamilyTreeComparisonService(AppDbContext dbContext, IUserContext us
                 {
                     candidates.Add(new MatchCandidates
                     {
-                        PersonAId = personA.Id,
-                        PersonBId = personB.Id,
+                        PersonA = personA,
+                        PersonB = personB,
                     });
                 }
                 else
@@ -154,8 +154,8 @@ public class FamilyTreeComparisonService(AppDbContext dbContext, IUserContext us
                     {
                         candidates.Add(new MatchCandidates
                         {
-                            PersonAId = personA.Id,
-                            PersonBId = personB.Id,
+                            PersonA = personA,
+                            PersonB = personB,
                         });
                     }
 
