@@ -914,6 +914,49 @@
   background-color: #eef0e6;
 }
 
+.react-flow__selection {
+  border: 1px dashed #2d747a;
+  background: rgb(54 123 131 / 14%);
+}
+
+.react-flow__nodesselection-rect {
+  border: 1px dashed #2d747a;
+  background: rgb(54 123 131 / 5%);
+}
+
+.selection-action-panel {
+  padding: 5px;
+  border: 1px solid #e1c2b8;
+  border-radius: 5px;
+  background: #fffaf6;
+  box-shadow: 0 3px 12px rgb(46 63 48 / 12%);
+}
+
+.selection-delete-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #dfb8af;
+  border-radius: 4px;
+  color: #873c30;
+  background: #fffaf6;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.selection-delete-button:hover:not(:disabled) {
+  border-color: #b45b4d;
+  background: #f8e9e4;
+}
+
+.selection-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .person-node {
   position: relative;
   display: flex;

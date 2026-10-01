@@ -7,8 +7,11 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   Handle,
+  Panel,
   Position,
   ReactFlow,
+  SelectionMode,
+  useStore,
   useEdgesState,
   useNodesState,
   type Connection,
@@ -18,7 +21,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   createFamilyTree,
   deleteFamilyTree,
@@ -39,11 +42,12 @@ import { useAuth } from "../auth/AuthContext";
 
 type NameField = "firstName" | "lastName";
 type YearField = "birthYear" | "deathYear";
-type PersonField = NameField | YearField;
-type RelationshipSide = "parent" | "child";
-type PersonNodeData = {
+export type PersonField = NameField | YearField;
+export type RelationshipSide = "parent" | "child";
+export type PersonNodeData = {
   person: Person;
   canAddParent: boolean;
+  origin?: "a" | "b" | "merged";
   onRename: (person: Person, field: PersonField, value: string) => Promise<void>;
   onDelete: (person: Person) => Promise<void>;
   onAddRelated: (
@@ -53,12 +57,13 @@ type PersonNodeData = {
     lastName: string,
   ) => Promise<void>;
 };
-type PersonTreeNode = Node<PersonNodeData, "person">;
-type ConnectionEdgeData = {
+export type PersonTreeNode = Node<PersonNodeData, "person">;
+export type ConnectionEdgeData = {
   onRemove: (edgeId: string, parentId: string, childId: string) => void;
+  origin?: "a" | "b" | "merged";
 };
-type FamilyTreeEdge = Edge<ConnectionEdgeData, "connection">;
-type SavedPosition = { x: number; y: number };
+export type FamilyTreeEdge = Edge<ConnectionEdgeData, "connection">;
+import { arrangePeople, type SavedPosition } from "../utils/treeLayout";
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -73,7 +78,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-function ConnectionEdgeView({
+export function ConnectionEdgeView({
   id,
   source,
   target,
@@ -89,6 +94,7 @@ function ConnectionEdgeView({
   markerStart,
   style,
 }: EdgeProps<FamilyTreeEdge>) {
+  const hasMultipleSelectedElements = useHasMultipleSelectedElements();
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -108,7 +114,7 @@ function ConnectionEdgeView({
         style={style}
       />
       <EdgeLabelRenderer>
-        {selected && (
+        {selected && !hasMultipleSelectedElements && (
           <button
             className="connection-delete-button nodrag nopan"
             type="button"
@@ -130,7 +136,15 @@ function ConnectionEdgeView({
 
 const edgeTypes = { connection: ConnectionEdgeView };
 
-function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
+function useHasMultipleSelectedElements() {
+  return useStore((state) =>
+    state.nodes.filter((node) => node.selected).length +
+    state.edges.filter((edge) => edge.selected).length > 1,
+  );
+}
+
+export function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
+  const hasMultipleSelectedElements = useHasMultipleSelectedElements();
   const [editingField, setEditingField] = useState<PersonField | null>(null);
   const [draft, setDraft] = useState("");
   const [addingSide, setAddingSide] = useState<RelationshipSide | null>(null);
@@ -286,9 +300,9 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
   }
 
   return (
-    <div className="person-node">
+    <div className={`person-node${data.origin ? ` person-node-${data.origin}` : ""}`}>
       <Handle type="target" position={Position.Top} />
-      {data.canAddParent && (
+      {data.canAddParent && !hasMultipleSelectedElements && (
         <button
           className="person-add-button person-add-parent nodrag nopan"
           type="button"
@@ -299,7 +313,7 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
           +
         </button>
       )}
-      {selected && (
+      {selected && !hasMultipleSelectedElements && (
         <button
           className="person-delete-button nodrag"
           type="button"
@@ -323,15 +337,17 @@ function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
         <span aria-hidden="true">–</span>
         {renderYear("deathYear")}
       </div>
-      <button
-        className="person-add-button person-add-child nodrag nopan"
-        type="button"
-        aria-label={`Add a child of ${data.person.firstName} ${data.person.lastName}`}
-        title="Add child"
-        onClick={(event) => openRelatedForm("child", event)}
-      >
-        +
-      </button>
+      {!hasMultipleSelectedElements && (
+        <button
+          className="person-add-button person-add-child nodrag nopan"
+          type="button"
+          aria-label={`Add a child of ${data.person.firstName} ${data.person.lastName}`}
+          title="Add child"
+          onClick={(event) => openRelatedForm("child", event)}
+        >
+          +
+        </button>
+      )}
       {addingSide && (
         <form
           className={`related-person-form nodrag nopan related-person-form-${addingSide}`}
@@ -380,129 +396,6 @@ function savedPositions(treeId: string): Record<string, SavedPosition> {
   }
 }
 
-function arrangePeople(
-  people: Person[],
-  edges: Edge[],
-  positions: Record<string, SavedPosition>,
-  onRename: PersonNodeData["onRename"],
-  onDelete: PersonNodeData["onDelete"],
-  onAddRelated: PersonNodeData["onAddRelated"],
-): PersonTreeNode[] {
-  const parentsByChild = new Map<string, string[]>();
-  for (const edge of edges) {
-    const parents = parentsByChild.get(edge.target) ?? [];
-    parents.push(edge.source);
-    parentsByChild.set(edge.target, parents);
-  }
-
-  const generations = new Map<string, number>();
-  function generationOf(personId: string, path = new Set<string>()): number {
-    const existing = generations.get(personId);
-    if (existing !== undefined) return existing;
-    if (path.has(personId)) return 0;
-
-    const nextPath = new Set(path).add(personId);
-    const parents = parentsByChild.get(personId) ?? [];
-    const generation = parents.length
-      ? Math.max(...parents.map((parentId) => generationOf(parentId, nextPath) + 1))
-      : 0;
-    generations.set(personId, generation);
-    return generation;
-  }
-
-  const rows = new Map<number, Person[]>();
-  for (const person of people) {
-    const rowNumber = generationOf(person.id);
-    const row = rows.get(rowNumber) ?? [];
-    row.push(person);
-    rows.set(rowNumber, row);
-  }
-  for (const row of rows.values()) {
-    row.sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
-  }
-
-  return people.map((person) => {
-    const rowNumber = generations.get(person.id) ?? 0;
-    const row = rows.get(rowNumber) ?? [];
-    const saved = positions[person.id];
-    const basePosition = {
-      x: (row.indexOf(person) - (row.length - 1) / 2) * 220,
-      y: rowNumber * 170 + 50,
-    };
-
-    let relatedPosition: SavedPosition | undefined;
-    const parentEdges = edges.filter((edge) => edge.target === person.id);
-    const childEdges = edges.filter((edge) => edge.source === person.id);
-
-    if (parentEdges.length > 0) {
-      const knownParents = parentEdges
-        .map((edge) => positions[edge.source])
-        .filter((position): position is SavedPosition => position !== undefined);
-
-      if (knownParents.length > 0) {
-        relatedPosition = {
-          x: knownParents.reduce((total, position) => total + position.x, 0) / knownParents.length,
-          y: Math.max(...knownParents.map((position) => position.y)) + 170,
-        };
-      }
-    }
-
-    if (!relatedPosition && childEdges.length > 0) {
-      const knownChildren = childEdges
-        .map((edge) => ({ edge, position: positions[edge.target] }))
-        .filter((item): item is { edge: Edge; position: SavedPosition } => item.position !== undefined);
-
-      if (knownChildren.length > 0) {
-        const { edge: childEdge, position: childPosition } = knownChildren[0];
-        const otherParentPositions = edges
-          .filter((edge) => edge.target === childEdge.target && edge.source !== person.id)
-          .map((edge) => positions[edge.source])
-          .filter((position): position is SavedPosition => position !== undefined);
-        const otherParent = otherParentPositions[0];
-
-        relatedPosition = {
-          x: otherParent
-            ? childPosition.x + (otherParent.x <= childPosition.x ? 140 : -140)
-            : childPosition.x,
-          y: childPosition.y - 170,
-        };
-      }
-    }
-
-    const desiredPosition = saved ?? relatedPosition ?? basePosition;
-    let position = desiredPosition;
-    if (!saved && relatedPosition) {
-      const occupied = Object.entries(positions)
-        .filter(([id]) => id !== person.id)
-        .map(([, existing]) => existing);
-      const offsets = [0, -210, 210, -420, 420, -630, 630];
-      const freeOffset = offsets.find((offset) =>
-        !occupied.some((existing) =>
-          Math.abs(existing.y - desiredPosition.y) < 80 &&
-          Math.abs(existing.x - (desiredPosition.x + offset)) < 180,
-        ),
-      );
-
-      if (freeOffset !== undefined) {
-        position = { ...desiredPosition, x: desiredPosition.x + freeOffset };
-      }
-    }
-
-    return {
-      id: person.id,
-      type: "person",
-      position,
-      data: {
-        person,
-        canAddParent: (parentsByChild.get(person.id)?.length ?? 0) < 2,
-        onRename,
-        onDelete,
-        onAddRelated,
-      },
-    };
-  });
-}
-
 export default function TreeView() {
   const { status, refreshUser } = useAuth();
   const [trees, setTrees] = useState<FamilyTree[]>([]);
@@ -521,6 +414,7 @@ export default function TreeView() {
   const [readyTreeId, setReadyTreeId] = useState<string | null>(null);
   const [loadedTreeId, setLoadedTreeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingSelection, setDeletingSelection] = useState(false);
   const [nodes, setNodes, onNodesChange] = useNodesState<PersonTreeNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
 
@@ -575,6 +469,48 @@ export default function TreeView() {
       setError(errorMessage(requestError));
     }
   }, [setEdges]);
+
+  async function handleDeleteSelection() {
+    const selectedNodes = nodes.filter((node) => node.selected);
+    const selectedEdges = edges.filter((edge) => edge.selected);
+    if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
+
+    const selectedNodeIds = new Set(selectedNodes.map((node) => node.id));
+    const standaloneEdges = selectedEdges.filter((edge) =>
+      !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target),
+    );
+    const confirmation = [
+      selectedNodes.length > 0 ? `${selectedNodes.length} ${selectedNodes.length === 1 ? "person" : "people"}` : "",
+      standaloneEdges.length > 0 ? `${standaloneEdges.length} ${standaloneEdges.length === 1 ? "connection" : "connections"}` : "",
+    ].filter(Boolean).join(" and ");
+    if (!window.confirm(`Delete ${confirmation}? This cannot be undone.`)) return;
+
+    setDeletingSelection(true);
+    setError(null);
+    try {
+      for (const edge of standaloneEdges) {
+        await deleteRelationship(edge.source, edge.target);
+      }
+      for (const node of selectedNodes) {
+        await deletePerson(node.id);
+      }
+
+      const selectedEdgeIds = new Set(standaloneEdges.map((edge) => edge.id));
+      setNodes((current) => current.filter((node) => !selectedNodeIds.has(node.id)));
+      setEdges((current) => current.filter((edge) =>
+        !selectedEdgeIds.has(edge.id) &&
+        !selectedNodeIds.has(edge.source) &&
+        !selectedNodeIds.has(edge.target),
+      ));
+    } catch (requestError) {
+      setReadyTreeId(null);
+      setLoadedTreeId(null);
+      setReloadCount((count) => count + 1);
+      setError(errorMessage(requestError));
+    } finally {
+      setDeletingSelection(false);
+    }
+  }
 
   const handleAddRelated = useCallback(async (
     person: Person,
@@ -829,6 +765,8 @@ export default function TreeView() {
 
   const selectedTree = trees.find((tree) => tree.id === selectedTreeId);
   const canvasLoading = Boolean(selectedTreeId && loadedTreeId !== selectedTreeId);
+  const selectedElementsCount = nodes.filter((node) => node.selected).length +
+    edges.filter((edge) => edge.selected).length;
 
   return (
     <main className="tree-workspace">
@@ -840,6 +778,9 @@ export default function TreeView() {
             <h1>Roots &amp; Branches</h1>
           </div>
         </header>
+        <nav className="tree-sidebar-nav" aria-label="Family tree pages">
+          <Link to="/compare">Compare trees</Link>
+        </nav>
 
         <section className="sidebar-section tree-list-section" aria-labelledby="sidebar-trees-heading">
           <div className="sidebar-section-heading">
@@ -1011,12 +952,28 @@ export default function TreeView() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={(connection) => void handleConnect(connection)}
+              selectionOnDrag
+              selectionMode={SelectionMode.Partial}
+              panOnDrag={[1, 2]}
               fitView
               fitViewOptions={{ padding: 0.2 }}
               minZoom={0.2}
               maxZoom={1.5}
               proOptions={{ hideAttribution: true }}
             >
+              {selectedElementsCount > 0 && (
+                <Panel position="top-left" className="selection-action-panel">
+                  <button
+                    className="selection-delete-button"
+                    type="button"
+                    disabled={deletingSelection}
+                    onClick={() => void handleDeleteSelection()}
+                  >
+                    <span className="connection-delete-icon" aria-hidden="true" />
+                    {deletingSelection ? "Deleting..." : `Delete selected (${selectedElementsCount})`}
+                  </button>
+                </Panel>
+              )}
               <Background color="#bdc9b8" gap={28} size={1} />
               <Controls position="bottom-right" />
             </ReactFlow>
