@@ -72,37 +72,6 @@ public class RelationshipService(AppDbContext dbContext, IUserContext userContex
         };
     }
 
-    // TODO check if unnecessary
-    // public async Task<List<RelationshipDto>> GetRelationshipsAsync()
-    // {
-    //     var userId = _userContext.UserId;
-        
-    //     var relationships = await _dbContext.ParentChildRelationships
-    //     .Where(r => r.Parent.FamilyTree.OwnerId == userId && r.Child.FamilyTree.OwnerId == userId)
-    //     .Select(r => new RelationshipDto
-    //     {
-    //         ParentId = r.ParentId,
-    //         ChildId = r.ChildId
-    //     })
-    //     .ToListAsync();
- 
-    //     return relationships;
-    // }
-
-    // public async Task<List<RelationshipDto>> GetRelationshipsByFamilyTreeIdAsync(Guid id)
-    // {
-    //     var relationships = await _dbContext.ParentChildRelationships
-    //     .Where(r => r.Parent.FamilyTreeId == id)
-    //     .Select(r => new RelationshipDto
-    //     {
-    //         ParentId = r.ParentId,
-    //         ChildId = r.ChildId
-    //     })
-    //     .ToListAsync();
- 
-    //     return relationships;
-    // }
-
     public async Task<RelationshipDto> GetRelationshipAsync(Guid parentId, Guid childId)
     {
         var userId = _userContext.UserId;
