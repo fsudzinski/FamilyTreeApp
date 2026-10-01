@@ -426,6 +426,54 @@
   text-align: right;
 }
 
+.comparison-save-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  padding-top: 15px;
+  border-top: 1px solid #d3d8ca;
+}
+
+.comparison-save-form {
+  display: grid;
+  width: min(100%, 560px);
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 8px 12px;
+}
+
+.comparison-save-form label {
+  grid-column: 1 / -1;
+  color: #516255;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.comparison-save-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #bdc9b7;
+  border-radius: 4px;
+  color: #293a31;
+  background: #fffefa;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.comparison-save-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.comparison-save-success {
+  margin: 0;
+  color: #315844;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 760px) {
   .tree-sidebar-nav {
     margin-top: -6px;
@@ -467,6 +515,14 @@
   .comparison-preview-canvas {
     height: 65vh;
     min-height: 400px;
+  }
+
+  .comparison-save-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comparison-save-form label {
+    grid-column: auto;
   }
 }
 

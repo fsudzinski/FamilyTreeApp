@@ -1,6 +1,5 @@
 import axios from "axios";
 import {
-  addEdge,
   BaseEdge,
   Background,
   Controls,
@@ -58,12 +57,35 @@ export type PersonNodeData = {
   ) => Promise<void>;
 };
 export type PersonTreeNode = Node<PersonNodeData, "person">;
+export type RelationshipPair = { parentId: string; childId: string };
+export type SiblingJunctionRoute = {
+  parentIds: string[];
+  childIds: string[];
+  showParentSegment: boolean;
+  showChildSegment: boolean;
+};
 export type ConnectionEdgeData = {
-  onRemove: (edgeId: string, parentId: string, childId: string) => void;
+  onRemove: (
+    edgeId: string,
+    parentId: string,
+    childId: string,
+    relationships?: RelationshipPair[],
+  ) => void;
+  relationships?: RelationshipPair[];
+  junctionRoute?: SiblingJunctionRoute;
+  connectionStyle?: ConnectionStyle;
   origin?: "a" | "b" | "merged";
 };
 export type FamilyTreeEdge = Edge<ConnectionEdgeData, "connection">;
-import { arrangePeople, type SavedPosition } from "../utils/treeLayout";
+import {
+  applyConnectionStyle,
+  arrangePeople,
+  CONNECTION_STYLE_STORAGE_KEY,
+  PERSON_NODE_HEIGHT,
+  PERSON_NODE_WIDTH,
+  type ConnectionStyle,
+  type SavedPosition,
+} from "../utils/treeLayout";
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -88,30 +110,85 @@ export function ConnectionEdgeView({
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   markerEnd,
   markerStart,
   style,
 }: EdgeProps<FamilyTreeEdge>) {
   const hasMultipleSelectedElements = useHasMultipleSelectedElements();
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [curvedPath, curvedLabelX, curvedLabelY] = getBezierPath({
     sourceX,
     sourceY,
-    sourcePosition,
+    sourcePosition: Position.Bottom,
     targetX,
     targetY,
-    targetPosition,
+    targetPosition: Position.Top,
   });
+  const directMidY = (sourceY + targetY) / 2;
+  let labelX = data?.connectionStyle === "curved" ? curvedLabelX : (sourceX + targetX) / 2;
+  let labelY = data?.connectionStyle === "curved" ? curvedLabelY : directMidY;
+  let renderedPath = data?.connectionStyle === "curved"
+    ? curvedPath
+    : `M ${sourceX},${sourceY} V ${directMidY} H ${targetX} V ${targetY}`;
+  const flowNodes = useStore((state) => state.nodes);
+  const siblingRoute = data?.junctionRoute;
+  let junction: { x: number; y: number } | null = null;
+  if (siblingRoute) {
+    const positions = new Map(flowNodes.map((node) => [node.id, node.position]));
+    const parents = siblingRoute.parentIds
+      .map((personId) => positions.get(personId))
+      .filter((position): position is { x: number; y: number } => position !== undefined);
+    const children = siblingRoute.childIds
+      .map((personId) => positions.get(personId))
+      .filter((position): position is { x: number; y: number } => position !== undefined);
+
+    if (parents.length > 0 && children.length > 0) {
+      const parentCenterX = parents.reduce((total, position) => total + position.x + PERSON_NODE_WIDTH / 2, 0) / parents.length;
+      const childCenterX = children.reduce((total, position) => total + position.x + PERSON_NODE_WIDTH / 2, 0) / children.length;
+      const lowestParentBottom = Math.max(...parents.map((position) => position.y + PERSON_NODE_HEIGHT));
+      const highestChildTop = Math.min(...children.map((position) => position.y));
+      junction = {
+        x: (parentCenterX + childCenterX) / 2,
+        y: (lowestParentBottom + highestChildTop) / 2,
+      };
+    }
+  }
+
+  if (data?.connectionStyle !== "curved" && siblingRoute && junction) {
+    const routedPaths: string[] = [];
+    if (siblingRoute.showParentSegment) {
+      routedPaths.push(`M ${sourceX},${sourceY} V ${junction.y} H ${junction.x}`);
+    }
+    if (siblingRoute.showChildSegment) {
+      routedPaths.push(`M ${junction.x},${junction.y} H ${targetX} V ${targetY}`);
+    }
+    renderedPath = routedPaths.join(" ");
+    if (siblingRoute.showParentSegment && siblingRoute.showChildSegment) {
+      labelX = junction.x;
+      labelY = junction.y;
+    } else if (siblingRoute.showParentSegment) {
+      labelX = (sourceX + junction.x) / 2;
+      labelY = (sourceY + junction.y) / 2;
+    } else if (siblingRoute.showChildSegment) {
+      labelX = (junction.x + targetX) / 2;
+      labelY = (junction.y + targetY) / 2;
+    }
+  }
 
   return (
     <>
       <BaseEdge
         id={id}
-        path={edgePath}
+        path={renderedPath}
         markerEnd={markerEnd}
         markerStart={markerStart}
-        style={style}
+        style={{
+          ...style,
+          ...(selected ? {
+            stroke: "#c8322b",
+            strokeWidth: 4,
+            filter: "drop-shadow(0 0 2px #fff)",
+          } : {}),
+        }}
       />
       <EdgeLabelRenderer>
         {selected && !hasMultipleSelectedElements && (
@@ -123,7 +200,7 @@ export function ConnectionEdgeView({
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
             onClick={(event) => {
               event.stopPropagation();
-              data?.onRemove(id, source, target);
+              data?.onRemove(id, source, target, data.relationships);
             }}
           >
             <span className="connection-delete-icon" aria-hidden="true" />
@@ -415,8 +492,17 @@ export default function TreeView() {
   const [loadedTreeId, setLoadedTreeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingSelection, setDeletingSelection] = useState(false);
+  const [connectionStyle, setConnectionStyle] = useState<ConnectionStyle>(() =>
+    localStorage.getItem(CONNECTION_STYLE_STORAGE_KEY) === "curved" ? "curved" : "straight",
+  );
   const [nodes, setNodes, onNodesChange] = useNodesState<PersonTreeNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
+
+  const reloadSelectedTree = useCallback(() => {
+    setReadyTreeId(null);
+    setLoadedTreeId(null);
+    setReloadCount((count) => count + 1);
+  }, []);
 
   const handleRename = useCallback(async (person: Person, field: PersonField, value: string) => {
     const updatedPerson: Person = field === "birthYear"
@@ -446,29 +532,34 @@ export default function TreeView() {
   const handleDelete = useCallback(async (person: Person) => {
     try {
       await deletePerson(person.id);
-      setNodes((currentNodes) => currentNodes.filter((node) => node.id !== person.id));
-      setEdges((currentEdges) => currentEdges.filter(
-        (edge) => edge.source !== person.id && edge.target !== person.id,
-      ));
+      reloadSelectedTree();
       setError(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
     }
-  }, [setEdges, setNodes]);
+  }, [reloadSelectedTree]);
 
   const handleRemoveConnection = useCallback(async (
-    edgeId: string,
+    _edgeId: string,
     parentId: string,
     childId: string,
+    relationships?: RelationshipPair[],
   ) => {
     setError(null);
     try {
-      await deleteRelationship(parentId, childId);
-      setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
+      const pairs = relationships?.length ? relationships : [{ parentId, childId }];
+      const uniquePairs = [...new Map(pairs.map((pair) =>
+        [`${pair.parentId}:${pair.childId}`, pair],
+      )).values()];
+      for (const pair of uniquePairs) {
+        await deleteRelationship(pair.parentId, pair.childId);
+      }
+      reloadSelectedTree();
     } catch (requestError) {
+      reloadSelectedTree();
       setError(errorMessage(requestError));
     }
-  }, [setEdges]);
+  }, [reloadSelectedTree]);
 
   async function handleDeleteSelection() {
     const selectedNodes = nodes.filter((node) => node.selected);
@@ -476,36 +567,31 @@ export default function TreeView() {
     if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
 
     const selectedNodeIds = new Set(selectedNodes.map((node) => node.id));
-    const standaloneEdges = selectedEdges.filter((edge) =>
-      !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target),
+    const selectedRelations = selectedEdges.flatMap((edge) =>
+      edge.data?.relationships ?? [{ parentId: edge.source, childId: edge.target }],
     );
+    const relationsToDelete = [...new Map(selectedRelations
+      .filter((pair) => !selectedNodeIds.has(pair.parentId) && !selectedNodeIds.has(pair.childId))
+      .map((pair) => [`${pair.parentId}:${pair.childId}`, pair]),
+    ).values()];
     const confirmation = [
       selectedNodes.length > 0 ? `${selectedNodes.length} ${selectedNodes.length === 1 ? "person" : "people"}` : "",
-      standaloneEdges.length > 0 ? `${standaloneEdges.length} ${standaloneEdges.length === 1 ? "connection" : "connections"}` : "",
+      relationsToDelete.length > 0 ? `${relationsToDelete.length} ${relationsToDelete.length === 1 ? "connection" : "connections"}` : "",
     ].filter(Boolean).join(" and ");
     if (!window.confirm(`Delete ${confirmation}? This cannot be undone.`)) return;
 
     setDeletingSelection(true);
     setError(null);
     try {
-      for (const edge of standaloneEdges) {
-        await deleteRelationship(edge.source, edge.target);
+      for (const relationship of relationsToDelete) {
+        await deleteRelationship(relationship.parentId, relationship.childId);
       }
       for (const node of selectedNodes) {
         await deletePerson(node.id);
       }
-
-      const selectedEdgeIds = new Set(standaloneEdges.map((edge) => edge.id));
-      setNodes((current) => current.filter((node) => !selectedNodeIds.has(node.id)));
-      setEdges((current) => current.filter((edge) =>
-        !selectedEdgeIds.has(edge.id) &&
-        !selectedNodeIds.has(edge.source) &&
-        !selectedNodeIds.has(edge.target),
-      ));
+      reloadSelectedTree();
     } catch (requestError) {
-      setReadyTreeId(null);
-      setLoadedTreeId(null);
-      setReloadCount((count) => count + 1);
+      reloadSelectedTree();
       setError(errorMessage(requestError));
     } finally {
       setDeletingSelection(false);
@@ -593,19 +679,20 @@ export default function TreeView() {
             target,
             type: "connection",
             deletable: false,
-            data: { onRemove: handleRemoveConnection },
+            data: { onRemove: handleRemoveConnection, connectionStyle },
           };
         });
 
-        setEdges(treeEdges);
-        setNodes(arrangePeople(
+        const treeNodes = arrangePeople(
           people,
           treeEdges,
           savedPositions(treeId),
           handleRename,
           handleDelete,
           handleAddRelated,
-        ));
+        );
+        setEdges(applyConnectionStyle(people, treeEdges, connectionStyle));
+        setNodes(treeNodes);
         setReadyTreeId(treeId);
       } catch (requestError) {
         if (active) setError(errorMessage(requestError));
@@ -616,7 +703,7 @@ export default function TreeView() {
 
     void loadTree();
     return () => { active = false; };
-  }, [status, selectedTreeId, reloadCount, setEdges, setNodes, handleRename, handleDelete, handleAddRelated, handleRemoveConnection]);
+  }, [status, selectedTreeId, reloadCount, setEdges, setNodes, handleRename, handleDelete, handleAddRelated, handleRemoveConnection, connectionStyle]);
 
   useEffect(() => {
     if (!selectedTreeId || readyTreeId !== selectedTreeId) return;
@@ -655,7 +742,7 @@ export default function TreeView() {
     setTreeActionId(tree.id);
     setError(null);
     try {
-      await updateFamilyTree(tree.id, name);
+      await updateFamilyTree(tree.id, name, tree.visibility);
       setTrees((current) => current.map((item) =>
         item.id === tree.id ? { ...item, name } : item,
       ));
@@ -727,13 +814,7 @@ export default function TreeView() {
     setError(null);
     try {
       await createRelationship({ parentId: connection.source, childId: connection.target });
-      setEdges((current) => addEdge({
-        ...connection,
-        id: `${connection.source}-${connection.target}`,
-        type: "connection",
-        deletable: false,
-        data: { onRemove: handleRemoveConnection },
-      }, current));
+      reloadSelectedTree();
     } catch (requestError) {
       setError(errorMessage(requestError));
     }
@@ -742,13 +823,30 @@ export default function TreeView() {
   function handleResetLayout() {
     if (!selectedTreeId || nodes.length === 0) return;
     localStorage.removeItem(`family-tree-layout:${selectedTreeId}`);
-    setNodes(arrangePeople(
+    const resetNodes = arrangePeople(
       nodes.map((node) => node.data.person),
       edges,
       {},
       handleRename,
       handleDelete,
       handleAddRelated,
+    );
+    setNodes(resetNodes);
+    setEdges(applyConnectionStyle(
+      resetNodes.map((node) => node.data.person),
+      edges,
+      connectionStyle,
+    ));
+  }
+
+  function handleToggleConnectionStyle() {
+    const nextStyle = connectionStyle === "straight" ? "curved" : "straight";
+    setConnectionStyle(nextStyle);
+    localStorage.setItem(CONNECTION_STYLE_STORAGE_KEY, nextStyle);
+    setEdges((current) => applyConnectionStyle(
+      nodes.map((node) => node.data.person),
+      current,
+      nextStyle,
     ));
   }
 
@@ -916,6 +1014,13 @@ export default function TreeView() {
           {selectedTree && (
             <div className="canvas-header-actions">
               <span className="canvas-person-count">{nodes.length} people</span>
+              <button
+                className="layout-reset-button"
+                type="button"
+                onClick={handleToggleConnectionStyle}
+              >
+                {connectionStyle === "straight" ? "Curved lines" : "Straight lines"}
+              </button>
               <button
                 className="layout-reset-button"
                 type="button"

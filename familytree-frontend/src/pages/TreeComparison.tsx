@@ -24,9 +24,15 @@ import {
   type PersonField,
   type PersonNodeData,
   type PersonTreeNode,
+  type RelationshipPair,
   type RelationshipSide,
 } from "./TreeView";
-import { arrangePeople } from "../utils/treeLayout";
+import {
+  applyConnectionStyle,
+  arrangePeople,
+  CONNECTION_STYLE_STORAGE_KEY,
+  type ConnectionStyle,
+} from "../utils/treeLayout";
 import "./TreeComparison.css";
 
 type TreeSide = "a" | "b";
@@ -81,6 +87,7 @@ function buildPreview(
   candidates: MatchCandidate[],
   decisions: Record<string, CandidateDecision>,
   actions: PreviewActions,
+  connectionStyle: ConnectionStyle,
 ): PreviewGraph {
   const accepted = candidates.filter((candidate) =>
     decisions[candidateKey(candidate)]?.accepted === true,
@@ -146,7 +153,7 @@ function buildPreview(
       data: { ...node.data, origin: originById.get(node.id) },
     }));
 
-  return { nodes, edges };
+  return { nodes, edges: applyConnectionStyle(people, edges, connectionStyle) };
 }
 
 export default function TreeComparison() {
@@ -164,6 +171,9 @@ export default function TreeComparison() {
   const [previewNodes, setPreviewNodes, onPreviewNodesChange] = useNodesState<PersonTreeNode>([]);
   const [previewEdges, setPreviewEdges, onPreviewEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
   const [previewReady, setPreviewReady] = useState(false);
+  const [connectionStyle, setConnectionStyle] = useState<ConnectionStyle>(() =>
+    localStorage.getItem(CONNECTION_STYLE_STORAGE_KEY) === "curved" ? "curved" : "straight",
+  );
   const previewNodesRef = useRef(previewNodes);
   const handlePreviewAddRelatedRef = useRef<PersonNodeData["onAddRelated"]>(async () => {});
   const [error, setError] = useState<string | null>(null);
@@ -198,9 +208,23 @@ export default function TreeComparison() {
   const treeA = trees.find((tree) => tree.id === treeAId);
   const treeB = trees.find((tree) => tree.id === treeBId);
 
-  const handlePreviewRemove = useCallback((edgeId: string) => {
-    setPreviewEdges((current) => current.filter((edge) => edge.id !== edgeId));
-  }, [setPreviewEdges]);
+  const handlePreviewRemove = useCallback((
+    _edgeId: string,
+    parentId: string,
+    childId: string,
+    relationships?: RelationshipPair[],
+  ) => {
+    const pairs = relationships?.length ? relationships : [{ parentId, childId }];
+    const relationshipKeys = new Set(pairs.map((pair) => `${pair.parentId}:${pair.childId}`));
+    setPreviewEdges((current) => {
+      const remaining = current.filter((edge) => !relationshipKeys.has(`${edge.source}:${edge.target}`));
+      return applyConnectionStyle(
+        previewNodesRef.current.map((node) => node.data.person),
+        remaining,
+        connectionStyle,
+      );
+    });
+  }, [connectionStyle, setPreviewEdges]);
 
   const handlePreviewRename = useCallback(async (person: Person, field: PersonField, value: string) => {
     const updatedPerson: Person = field === "birthYear"
@@ -216,11 +240,15 @@ export default function TreeComparison() {
   }, [setPreviewNodes]);
 
   const handlePreviewDelete = useCallback(async (person: Person) => {
-    setPreviewNodes((current) => current.filter((node) => node.id !== person.id));
-    setPreviewEdges((current) => current.filter((edge) =>
-      edge.source !== person.id && edge.target !== person.id,
+    const remainingNodes = previewNodesRef.current.filter((node) => node.id !== person.id);
+    previewNodesRef.current = remainingNodes;
+    setPreviewNodes(remainingNodes);
+    setPreviewEdges((current) => applyConnectionStyle(
+      remainingNodes.map((node) => node.data.person),
+      current.filter((edge) => edge.source !== person.id && edge.target !== person.id),
+      connectionStyle,
     ));
-  }, [setPreviewEdges, setPreviewNodes]);
+  }, [connectionStyle, setPreviewEdges, setPreviewNodes]);
 
   const handlePreviewAddRelated = useCallback(async (
     person: Person,
@@ -240,17 +268,16 @@ export default function TreeComparison() {
       deathYear: null,
       familyTreeId,
     };
-    const relatedNode = previewNodesRef.current.find((node) => node.id === person.id);
+    const existingNode = previewNodesRef.current.find((node) => node.id === person.id);
     const offset = side === "parent" ? -170 : 170;
     const position = {
-      x: relatedNode?.position.x ?? 0,
-      y: (relatedNode?.position.y ?? 40) + offset,
+      x: existingNode?.position.x ?? 0,
+      y: (existingNode?.position.y ?? 40) + offset,
     };
     const source = side === "parent" ? id : person.id;
     const target = side === "parent" ? person.id : id;
     const connectionId = `${source}-${target}`;
-
-    setPreviewNodes((current) => [...current, {
+    const newNode: PersonTreeNode = {
       id,
       type: "person",
       position,
@@ -262,8 +289,14 @@ export default function TreeComparison() {
         onDelete: handlePreviewDelete,
         onAddRelated: (...args) => handlePreviewAddRelatedRef.current(...args),
       },
-    }]);
-    setPreviewEdges((current) => [...current, {
+    };
+    const nextNodes = [...previewNodesRef.current, newNode];
+    previewNodesRef.current = nextNodes;
+
+    setPreviewNodes(nextNodes);
+    setPreviewEdges((current) => applyConnectionStyle(
+      nextNodes.map((node) => node.data.person),
+      [...current, {
       id: connectionId,
       source,
       target,
@@ -271,7 +304,9 @@ export default function TreeComparison() {
       deletable: false,
       data: { onRemove: handlePreviewRemove, origin: "merged" },
       style: { stroke: "#39714c", strokeWidth: 1.8 },
-    }]);
+      }],
+      connectionStyle,
+    ));
   }, [
     handlePreviewDelete,
     handlePreviewRemove,
@@ -279,6 +314,7 @@ export default function TreeComparison() {
     setPreviewEdges,
     setPreviewNodes,
     treeAId,
+    connectionStyle,
   ]);
   useEffect(() => {
     handlePreviewAddRelatedRef.current = handlePreviewAddRelated;
@@ -286,14 +322,18 @@ export default function TreeComparison() {
 
   function handlePreviewConnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
-    setPreviewEdges((current) => addEdge({
-      ...connection,
-      id: `${connection.source}-${connection.target}`,
-      type: "connection",
-      deletable: false,
-      data: { onRemove: handlePreviewRemove, origin: "merged" },
-      style: { stroke: "#39714c", strokeWidth: 1.8 },
-    }, current));
+    setPreviewEdges((current) => applyConnectionStyle(
+      previewNodes.map((node) => node.data.person),
+      addEdge({
+        ...connection,
+        id: `${connection.source}-${connection.target}`,
+        type: "connection",
+        deletable: false,
+        data: { onRemove: handlePreviewRemove, origin: "merged" },
+        style: { stroke: "#39714c", strokeWidth: 1.8 },
+      }, current),
+      connectionStyle,
+    ));
   }
 
   function handleResetPreviewLayout() {
@@ -310,22 +350,46 @@ export default function TreeComparison() {
       data: { ...node.data, origin: origins.get(node.id) },
     }));
     setPreviewNodes(resetNodes);
+    setPreviewEdges(applyConnectionStyle(
+      resetNodes.map((node) => node.data.person),
+      previewEdges,
+      connectionStyle,
+    ));
+  }
+
+  function handleToggleConnectionStyle() {
+    const nextStyle = connectionStyle === "straight" ? "curved" : "straight";
+    setConnectionStyle(nextStyle);
+    localStorage.setItem(CONNECTION_STYLE_STORAGE_KEY, nextStyle);
+    setPreviewEdges((current) => applyConnectionStyle(
+      previewNodesRef.current.map((node) => node.data.person),
+      current,
+      nextStyle,
+    ));
   }
 
   function handleDeletePreviewSelection() {
-    const selectedNodeIds = new Set(
-      previewNodes.filter((node) => node.selected).map((node) => node.id),
-    );
-    const selectedEdgeIds = new Set(
-      previewEdges.filter((edge) => edge.selected).map((edge) => edge.id),
-    );
-    if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) return;
+    const selectedNodes = previewNodes.filter((node) => node.selected);
+    const selectedEdges = previewEdges.filter((edge) => edge.selected);
+    const selectedNodeIds = new Set(selectedNodes.map((node) => node.id));
+    const selectedRelationshipKeys = new Set(selectedEdges.flatMap((edge) =>
+      (edge.data?.relationships ?? [{ parentId: edge.source, childId: edge.target }])
+        .map((pair) => `${pair.parentId}:${pair.childId}`),
+    ));
+    if (selectedNodeIds.size === 0 && selectedEdges.length === 0) return;
 
-    setPreviewNodes((current) => current.filter((node) => !selectedNodeIds.has(node.id)));
-    setPreviewEdges((current) => current.filter((edge) =>
-      !selectedEdgeIds.has(edge.id) &&
+    const remainingNodes = previewNodes.filter((node) => !selectedNodeIds.has(node.id));
+    const remainingEdges = previewEdges.filter((edge) =>
+      !selectedRelationshipKeys.has(`${edge.source}:${edge.target}`) &&
       !selectedNodeIds.has(edge.source) &&
       !selectedNodeIds.has(edge.target),
+    );
+    previewNodesRef.current = remainingNodes;
+    setPreviewNodes(remainingNodes);
+    setPreviewEdges(applyConnectionStyle(
+      remainingNodes.map((node) => node.data.person),
+      remainingEdges,
+      connectionStyle,
     ));
   }
 
@@ -451,7 +515,7 @@ export default function TreeComparison() {
         onDelete: handlePreviewDelete,
         onAddRelated: handlePreviewAddRelated,
         onRemove: handlePreviewRemove,
-      });
+      }, connectionStyle);
       setPreviewNodes(previewGraph.nodes);
       setPreviewEdges(previewGraph.edges);
       setPreviewReady(true);
@@ -678,6 +742,13 @@ export default function TreeComparison() {
               <span><i className="legend-swatch legend-tree-a" />{treeA?.name}</span>
               <span><i className="legend-swatch legend-tree-b" />{treeB?.name}</span>
               <span><i className="legend-swatch legend-merged" />Matched</span>
+              <button
+                className="layout-reset-button"
+                type="button"
+                onClick={handleToggleConnectionStyle}
+              >
+                {connectionStyle === "straight" ? "Curved lines" : "Straight lines"}
+              </button>
               <button
                 className="layout-reset-button"
                 type="button"

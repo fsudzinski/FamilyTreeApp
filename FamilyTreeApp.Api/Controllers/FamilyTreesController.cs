@@ -32,6 +32,7 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
         {
             Id = Guid.NewGuid(),
             Name = dto.Name.Trim(),
+            Visibility = dto.Visibility,
             OwnerId = userId
         };
 
@@ -42,7 +43,8 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
         {
             Id = familyTree.Id,
             Name = familyTree.Name,
-            OwnerId = familyTree.OwnerId
+            OwnerId = familyTree.OwnerId,
+            Visibility = familyTree.Visibility
         };
 
         return CreatedAtAction(
@@ -64,7 +66,8 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
         {
             Id = ft.Id,
             Name = ft.Name,
-            OwnerId = ft.OwnerId
+            OwnerId = ft.OwnerId,
+            Visibility = ft.Visibility
         })
         .ToListAsync();
 
@@ -83,7 +86,8 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
         {
             Id = ft.Id,
             Name = ft.Name,
-            OwnerId = ft.OwnerId
+            OwnerId = ft.OwnerId,
+            Visibility = ft.Visibility
         })
         .FirstOrDefaultAsync();
 
@@ -136,6 +140,7 @@ public class FamilyTreesController(AppDbContext dbContext, IUserContext userCont
             .Where(ft => ft.Id == id && ft.OwnerId == userId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(ft => ft.Name, dto.Name.Trim())
+                .SetProperty(ft => ft.Visibility, dto.Visibility)
             );
 
         if (affectedRows == 0)
