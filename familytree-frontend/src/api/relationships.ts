@@ -12,3 +12,7 @@ export async function createRelationship(relationship: ParentChildRelationship) 
   );
   return response.data;
 }
+
+export async function deleteRelationship(parentId: string, childId: string) {
+  await api.delete(`/relationships/${parentId}/${childId}`);
+}

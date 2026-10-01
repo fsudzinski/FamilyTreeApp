@@ -1,8 +1,11 @@
 import axios from "axios";
 import {
   addEdge,
+  BaseEdge,
   Background,
   Controls,
+  EdgeLabelRenderer,
+  getBezierPath,
   Handle,
   Position,
   ReactFlow,
@@ -10,6 +13,7 @@ import {
   useNodesState,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
@@ -30,7 +34,7 @@ import {
   type Person,
   updatePerson,
 } from "../api/persons";
-import { createRelationship } from "../api/relationships";
+import { createRelationship, deleteRelationship } from "../api/relationships";
 import { useAuth } from "../auth/AuthContext";
 
 type NameField = "firstName" | "lastName";
@@ -48,6 +52,10 @@ type PersonNodeData = {
   ) => Promise<void>;
 };
 type PersonTreeNode = Node<PersonNodeData, "person">;
+type ConnectionEdgeData = {
+  onRemove: (edgeId: string, parentId: string, childId: string) => void;
+};
+type FamilyTreeEdge = Edge<ConnectionEdgeData, "connection">;
 type SavedPosition = { x: number; y: number };
 
 function errorMessage(error: unknown) {
@@ -62,6 +70,63 @@ function errorMessage(error: unknown) {
   }
   return error instanceof Error ? error.message : "Something went wrong.";
 }
+
+function ConnectionEdgeView({
+  id,
+  source,
+  target,
+  selected,
+  data,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  markerStart,
+  style,
+}: EdgeProps<FamilyTreeEdge>) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        markerStart={markerStart}
+        style={style}
+      />
+      <EdgeLabelRenderer>
+        {selected && (
+          <button
+            className="connection-delete-button nodrag nopan"
+            type="button"
+            aria-label="Remove connection"
+            title="Remove connection"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            onClick={(event) => {
+              event.stopPropagation();
+              data?.onRemove(id, source, target);
+            }}
+          >
+            <span className="connection-delete-icon" aria-hidden="true" />
+          </button>
+        )}
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { connection: ConnectionEdgeView };
 
 function PersonNodeView({ data, selected }: NodeProps<PersonTreeNode>) {
   const [editingField, setEditingField] = useState<NameField | null>(null);
@@ -398,7 +463,7 @@ export default function TreeView() {
   const [loadedTreeId, setLoadedTreeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<PersonTreeNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FamilyTreeEdge>([]);
 
   const handleRename = useCallback(async (person: Person, field: NameField, value: string) => {
     const updatedPerson = { ...person, [field]: value };
@@ -431,6 +496,20 @@ export default function TreeView() {
       setError(errorMessage(requestError));
     }
   }, [setEdges, setNodes]);
+
+  const handleRemoveConnection = useCallback(async (
+    edgeId: string,
+    parentId: string,
+    childId: string,
+  ) => {
+    setError(null);
+    try {
+      await deleteRelationship(parentId, childId);
+      setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    }
+  }, [setEdges]);
 
   const handleAddRelated = useCallback(async (
     person: Person,
@@ -505,9 +584,16 @@ export default function TreeView() {
         people.forEach((parent, index) => {
           children[index].forEach((child) => pairs.add(`${parent.id}:${child.id}`));
         });
-        const treeEdges: Edge[] = Array.from(pairs, (pair) => {
+        const treeEdges: FamilyTreeEdge[] = Array.from(pairs, (pair) => {
           const [source, target] = pair.split(":");
-          return { id: `${source}-${target}`, source, target, type: "default" };
+          return {
+            id: `${source}-${target}`,
+            source,
+            target,
+            type: "connection",
+            deletable: false,
+            data: { onRemove: handleRemoveConnection },
+          };
         });
 
         setEdges(treeEdges);
@@ -529,7 +615,7 @@ export default function TreeView() {
 
     void loadTree();
     return () => { active = false; };
-  }, [status, selectedTreeId, reloadCount, setEdges, setNodes, handleRename, handleDelete, handleAddRelated]);
+  }, [status, selectedTreeId, reloadCount, setEdges, setNodes, handleRename, handleDelete, handleAddRelated, handleRemoveConnection]);
 
   useEffect(() => {
     if (!selectedTreeId || readyTreeId !== selectedTreeId) return;
@@ -639,7 +725,9 @@ export default function TreeView() {
       setEdges((current) => addEdge({
         ...connection,
         id: `${connection.source}-${connection.target}`,
-        type: "default",
+        type: "connection",
+        deletable: false,
+        data: { onRemove: handleRemoveConnection },
       }, current));
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -684,7 +772,7 @@ export default function TreeView() {
           </div>
         </header>
 
-        <section className="sidebar-section" aria-labelledby="sidebar-trees-heading">
+        <section className="sidebar-section tree-list-section" aria-labelledby="sidebar-trees-heading">
           <div className="sidebar-section-heading">
             <h2 id="sidebar-trees-heading">Your trees</h2>
             <span className="tree-count">{trees.length}</span>
@@ -802,7 +890,7 @@ export default function TreeView() {
           </section>
         )}
 
-        <p className="sidebar-footnote">Hover a person and use + above or below to add a connected parent or child. Drag nodes to arrange your tree.</p>
+        <p className="sidebar-footnote">Hover a person and use + above or below to add a connected parent or child. Select a connection to remove it. Drag nodes to arrange your tree.</p>
       </aside>
 
       <section className="tree-canvas-panel" aria-label="Family tree canvas">
@@ -842,10 +930,11 @@ export default function TreeView() {
               <p>Add a person from the sidebar to start this tree.</p>
             </div>
           ) : (
-            <ReactFlow<PersonTreeNode, Edge>
+            <ReactFlow<PersonTreeNode, FamilyTreeEdge>
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={(connection) => void handleConnect(connection)}

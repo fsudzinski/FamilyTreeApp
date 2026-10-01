@@ -473,14 +473,15 @@
   z-index: 2;
   display: flex;
   min-width: 0;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   flex-direction: column;
   gap: 26px;
   padding: 28px 20px 20px;
   border-right: 1px solid #d3d8ca;
   background: #fbfaf5;
   box-shadow: 8px 0 24px rgb(43 58 45 / 4%);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -518,6 +519,22 @@
   border-top: 1px solid #e1e3d8;
 }
 
+.tree-list-section {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.tree-list-section > .sidebar-section-heading,
+.tree-list-section > .sidebar-form {
+  flex: 0 0 auto;
+}
+
+.add-person-section {
+  flex: 0 0 auto;
+}
+
 .sidebar-section-heading {
   display: flex;
   align-items: center;
@@ -536,10 +553,15 @@
 
 .sidebar-tree-list {
   display: grid;
+  min-height: 0;
+  flex: 0 1 auto;
+  align-content: start;
   gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sidebar-tree-item {
@@ -815,6 +837,65 @@
 .layout-reset-button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+.connection-delete-button {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #dfb8af;
+  border-radius: 50%;
+  color: #9d4538;
+  background: #fffaf6;
+  box-shadow: 0 2px 7px rgb(51 39 32 / 16%);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.connection-delete-button:hover {
+  border-color: #b45b4d;
+  color: #7d2d23;
+  background: #f8e8e2;
+}
+
+.connection-delete-button:focus-visible {
+  outline: 2px solid #315844;
+  outline-offset: 2px;
+}
+
+.connection-delete-icon {
+  position: relative;
+  width: 10px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 2px 2px;
+}
+
+.connection-delete-icon::before,
+.connection-delete-icon::after {
+  position: absolute;
+  left: 50%;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.connection-delete-icon::before {
+  top: -2px;
+  width: 14px;
+  border-top: 1.5px solid currentColor;
+}
+
+.connection-delete-icon::after {
+  top: -4px;
+  width: 5px;
+  border-top: 1.5px solid currentColor;
 }
 
 .tree-canvas {
@@ -1126,13 +1207,23 @@
   }
 
   .tree-sidebar {
+    height: auto;
     min-height: auto;
-    max-height: 44vh;
+    max-height: none;
     gap: 18px;
     padding: 18px 18px 14px;
     border-right: 0;
     border-bottom: 1px solid #d3d8ca;
-    overflow-y: auto;
+    overflow: visible;
+  }
+
+  .tree-list-section {
+    flex: 0 1 auto;
+  }
+
+  .sidebar-tree-list {
+    max-height: min(20vh, 150px);
+    flex: 0 1 auto;
   }
 
   .sidebar-footnote {
